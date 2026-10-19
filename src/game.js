@@ -338,6 +338,7 @@ export class Game {
       if (this.notified.has(id)) return;
       this.notified.add(id);
       this.funds += amount;
+      this.emit('donation', amount);
       this.emit('toast', `🎁 ${msg} <b>+$${amount}K</b>`, 'good');
     };
     if (this.hasVC) grant('m-vc', 75, 'Your visitor center opened! A local foundation donated');
