@@ -367,6 +367,9 @@ let paintFailShown = false;
 const activePointers = new Set();
 
 el.addEventListener('contextmenu', (e) => e.preventDefault());
+// Block long-press menus and stray selections outside text inputs.
+document.addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); });
+document.addEventListener('selectstart', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); });
 
 el.addEventListener('pointerdown', (e) => {
   activePointers.add(e.pointerId);
