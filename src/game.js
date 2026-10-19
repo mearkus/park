@@ -55,10 +55,10 @@ export const OTHER = {
 };
 
 export const LEVELS = [
-  { id: 'wild', name: 'Unprotected Land', short: 'Wild Land', grant: 3, bonus: 0 },
-  { id: 'state', name: 'State Park', short: 'State Park', grant: 10, bonus: 60, blurb: 'The state legislature has protected your land as a State Park.' },
-  { id: 'monument', name: 'National Monument', short: 'Monument', grant: 22, bonus: 120, blurb: 'By presidential proclamation under the Antiquities Act of 1906, your extraordinary landmarks are now a National Monument. (Grand Canyon began this way in 1908.)' },
-  { id: 'national', name: 'National Park', short: 'National Park', grant: 45, bonus: 250, blurb: 'By an Act of Congress, your land is now a National Park — protected for all people, for all time.' },
+  { id: 'wild', name: 'Unprotected Land', short: 'Wild Land', grant: 14, bonus: 0 },
+  { id: 'state', name: 'State Park', short: 'State Park', grant: 22, bonus: 60, blurb: 'The state legislature has protected your land as a State Park.' },
+  { id: 'monument', name: 'National Monument', short: 'Monument', grant: 34, bonus: 120, blurb: 'By presidential proclamation under the Antiquities Act of 1906, your extraordinary landmarks are now a National Monument. (Grand Canyon began this way in 1908.)' },
+  { id: 'national', name: 'National Park', short: 'National Park', grant: 55, bonus: 250, blurb: 'By an Act of Congress, your land is now a National Park — protected for all people, for all time.' },
 ];
 
 export const HONORS = {
@@ -114,7 +114,7 @@ export class Game {
     world.scene.add(this.water);
     this.vegetation = new Vegetation(world.scene, this.terrain, this.scn, world.uniforms);
 
-    this.funds = save?.funds ?? 650;
+    this.funds = save?.funds ?? 800;
     this.level = save?.level ?? 0;
     this.honors = new Set(save?.honors ?? []);
     this.entities = new Map();
@@ -326,11 +326,26 @@ export class Game {
       this.addEntity(kind, x, z, 0, false);
     }
     this.recompute();
+    this.milestoneGrants();
     this.emit('placed', tool, x, z);
     return check;
   }
 
   // Waterfalls follow the terrain, so rebuild them after the ground changes.
+  // One-time donations that help a young park get going.
+  milestoneGrants() {
+    const grant = (id, amount, msg) => {
+      if (this.notified.has(id)) return;
+      this.notified.add(id);
+      this.funds += amount;
+      this.emit('toast', `🎁 ${msg} <b>+$${amount}K</b>`, 'good');
+    };
+    if (this.hasVC) grant('m-vc', 75, 'Your visitor center opened! A local foundation donated');
+    if (this.landmarkCount >= 1) grant('m-lm', 50, 'Word of your first protected wonder spread \u2014 a conservation society donated');
+    if (this.herds.length >= 1) grant('m-herd', 40, 'Wildlife groups celebrated the reintroduction and donated');
+    if (this.connectedLandmarks >= 2) grant('m-trail', 50, 'Hikers love your trails! The Friends of the Park donated');
+  }
+
   refreshHerdsAndModels() {
     for (const e of this.entities.values()) {
       if (e.kind !== 'waterfall') continue;
@@ -667,8 +682,9 @@ export class Game {
     const m = this.month % 12;
     const seasonal = SEASONAL[m] * 12 / SEASONAL_SUM;
     const monthVisitors = (this.visitors / 12) * seasonal;
-    let income = monthVisitors * 0.003 + LEVELS[this.level].grant;
-    if (this.scores.beauty > 50) income += (this.scores.beauty - 50) * 0.12;
+    let income = monthVisitors * 0.004 + LEVELS[this.level].grant;
+    // Conservation donors support wild, beautiful land from day one
+    income += this.scores.eco * 0.1 + Math.max(0, this.scores.beauty - 25) * 0.15;
     let upkeep = 0;
     for (const e of this.entities.values()) {
       if (!FACILITIES[e.kind]) continue;
