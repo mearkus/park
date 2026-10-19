@@ -204,7 +204,7 @@ export class Vegetation {
             } else {
               s.set(w, h, w);
               col.set(crownCol).multiplyScalar(0.85 + r3 * 0.3);
-              if (winterSnow > 0.5 && def.shape !== 'round') col.lerp(white, 0.45);
+              if (winterSnow > 0.5 && def.shape !== 'round') col.lerp(white, 0.22);
               K.crown.setColorAt(c, col);
             }
             m.compose(p, q, s);

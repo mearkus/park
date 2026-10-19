@@ -28,6 +28,8 @@ export class Environment {
     this.renderer = renderer;
     this.quality = quality;
 
+    // When post-processing tone-maps the whole frame, the sky pre-compensates so it keeps its colours.
+    this.toneComp = { uExposure: { value: 0.6 }, uComp: { value: 0 } };
     this.makeSky();
     scene.add(this.sky);
 
@@ -69,6 +71,7 @@ export class Environment {
       uSunSize: { value: 1 },
       uTime: { value: 0 },
     };
+    Object.assign(this.skyUniforms, this.toneComp);
     const mat = new THREE.ShaderMaterial({
       uniforms: this.skyUniforms,
       side: THREE.BackSide,
@@ -79,6 +82,13 @@ export class Environment {
         void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`,
       fragmentShader: /* glsl */`
         uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSunDir; uniform vec3 uSunColor; uniform float uSunSize; uniform float uTime;
+        uniform float uExposure; uniform float uComp;
+        vec3 invTone(vec3 t){
+          t = clamp(t, 0.0, 0.98);
+          vec3 a = 2.51 - 2.43 * t; vec3 b = 0.03 - 0.59 * t; vec3 c = -0.14 * t;
+          vec3 x = (-b + sqrt(b * b - 4.0 * a * c)) / (2.0 * a);
+          return mix(t, x / max(uExposure, 0.05), uComp);
+        }
         varying vec3 vDir;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
         float vnoise(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
@@ -95,7 +105,7 @@ export class Environment {
           vec2 cp = d.xz / (d.y + 0.15) * 1.6 + vec2(uTime * 0.01, 0.0);
           float c = smoothstep(0.55, 0.85, fbm(cp)) * smoothstep(0.02, 0.25, d.y);
           col = mix(col, mix(uHorizon, vec3(1.0), 0.5), c * 0.35 * uSunSize);
-          gl_FragColor = vec4(col, 1.0);
+          gl_FragColor = vec4(invTone(col), 1.0);
           #include <colorspace_fragment>
         }`,
     });
@@ -113,6 +123,7 @@ export class Environment {
       uShade: { value: new THREE.Color('#aebfd2') },
       uHorizon: { value: new THREE.Color('#bcd4e8') },
     };
+    Object.assign(this.seaUniforms, this.toneComp);
     const mat = new THREE.ShaderMaterial({
       uniforms: this.seaUniforms,
       vertexShader: /* glsl */`
@@ -120,6 +131,13 @@ export class Environment {
         void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
       fragmentShader: /* glsl */`
         uniform float uTime; uniform vec3 uLight; uniform vec3 uShade; uniform vec3 uHorizon;
+        uniform float uExposure; uniform float uComp;
+        vec3 invTone(vec3 t){
+          t = clamp(t, 0.0, 0.98);
+          vec3 a = 2.51 - 2.43 * t; vec3 b = 0.03 - 0.59 * t; vec3 c = -0.14 * t;
+          vec3 x = (-b + sqrt(b * b - 4.0 * a * c)) / (2.0 * a);
+          return mix(t, x / max(uExposure, 0.05), uComp);
+        }
         varying vec3 vW;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
         float vnoise(vec2 p){ vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);
@@ -134,7 +152,7 @@ export class Environment {
           col = mix(col, uShade * 0.7, (1.0 - smoothstep(110.0, 260.0, d)) * 0.5);
           float fade = smoothstep(400.0, 3200.0, d);
           col = mix(col, uHorizon, fade);
-          gl_FragColor = vec4(col, 1.0);
+          gl_FragColor = vec4(invTone(col), 1.0);
           #include <colorspace_fragment>
         }`,
       depthWrite: true,
@@ -228,6 +246,7 @@ export class Environment {
     this.hemi.intensity = t.hemiI;
     this.fog.color.set(t.horizon);
     this.renderer.toneMappingExposure = t.exposure;
+    this.toneComp.uExposure.value = t.exposure;
     this.seaUniforms.uHorizon.value.set(t.horizon);
     this.seaUniforms.uLight.value.set(t.cloud);
     this.seaUniforms.uShade.value.set(t.cloudShade);
@@ -238,6 +257,8 @@ export class Environment {
     this.nightness = t.moon ? 1 : 0;
 
     // Image-based lighting from the sky
+    const comp = this.toneComp.uComp.value;
+    this.toneComp.uComp.value = 0;
     this.scene.remove(this.sky);
     const envScene = new THREE.Scene();
     envScene.add(this.sky);
@@ -245,6 +266,7 @@ export class Environment {
     this.envRT = this.pmrem.fromScene(envScene, 0, 1, 20000);
     envScene.remove(this.sky);
     this.scene.add(this.sky);
+    this.toneComp.uComp.value = comp;
     this.scene.environment = this.envRT.texture;
     this.scene.environmentIntensity = t.env;
   }
