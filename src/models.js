@@ -2,22 +2,24 @@
 import * as THREE from 'three';
 import { T, N } from './terrain.js';
 import { mulberry32 } from './noise.js';
+import { textures } from './textures.js';
 
 let M = null;
 export function materials() {
   if (M) return M;
   const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.85, ...o });
+  const tx = textures();
   M = {
-    wood: std('#7a5233'),
-    logs: std('#5e3d26'),
-    roof: std('#3f6040'),
-    roofRed: std('#8b3d2b'),
-    stone: std('#9b9285'),
-    stoneDark: std('#6c645b'),
+    wood: std('#7a5233', { map: tx.planks }),
+    logs: std('#5e3d26', { map: tx.logs }),
+    roof: std('#3f6040', { map: tx.shingles }),
+    roofRed: std('#8b3d2b', { map: tx.shingles }),
+    stone: std('#9b9285', { map: tx.stone }),
+    stoneDark: std('#6c645b', { map: tx.stone }),
     window: std('#2b2116', { emissive: new THREE.Color('#ffc46b'), emissiveIntensity: 0.2 }),
     cream: std('#efe4c8'),
     metal: std('#4d5359', { metalness: 0.5, roughness: 0.4 }),
-    tentA: std('#e0703a'), tentB: std('#3d7fb5'), tentC: std('#e9c043'),
+    tentA: std('#e0703a', { map: tx.canvas }), tentB: std('#3d7fb5', { map: tx.canvas }), tentC: std('#e9c043', { map: tx.canvas }),
     flame: new THREE.MeshBasicMaterial({ color: '#ffb347' }),
     flameCore: new THREE.MeshBasicMaterial({ color: '#fff1a8' }),
     flag: std('#2f5d43', { side: THREE.DoubleSide }),
