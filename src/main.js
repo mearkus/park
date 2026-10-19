@@ -5,7 +5,7 @@ import { Particles } from './particles.js';
 import { Game, toolInfo, LEVELS, fmtMoney, fmtVisitors } from './game.js';
 import { SCENARIOS, SPECIES } from './scenarios.js';
 import { HALF, TILE, N } from './terrain.js';
-import { syncMaterials } from './models.js';
+import { syncMaterials, buildModel } from './models.js';
 import { UI, escapeHTML } from './ui.js';
 import { Audio } from './audio.js';
 
@@ -141,6 +141,8 @@ function setTour(on) {
 
 function selectTool(id) {
   tool = id;
+  pendingTap = null;
+  hideGhost();
   ui.selectTool(id);
   const paint = !!toolInfo(id).paint;
   controls.mouseButtons.LEFT = paint ? -1 : THREE.MOUSE.ROTATE;
@@ -152,6 +154,8 @@ function selectTool(id) {
 
 // ---------------------------------------------------------------- world lifecycle
 function loadWorld(id, save = null) {
+  hideGhost();
+  pendingTap = null;
   if (game) game.dispose();
   game = new Game(world, id, save);
   hookGame(game);
@@ -323,12 +327,14 @@ function describeTile(x, z) {
 }
 
 function updateHover() {
-  if (!game || mode !== 'play' || !pointer || tour || modalOpen) { marker.visible = false; return; }
+  if (!game || mode !== 'play' || !pointer || tour || modalOpen) { marker.visible = false; hideGhost(); return; }
+  if (coarse && pendingTap) return; // keep the tap-to-preview ghost in place
   const hit = pick(pointer.x, pointer.y);
   hover = hit;
-  if (!hit) { marker.visible = false; if (!coarse) ui.tileInfo(null); return; }
+  if (!hit) { marker.visible = false; hideGhost(); if (!coarse) ui.tileInfo(null); return; }
   const size = toolSize(tool);
   if (tool === 'explore') {
+    hideGhost();
     setMarker(hit.x, hit.z, 1, true);
     markerMat.color.set('#ffffff');
     if (!coarse) ui.tileInfo(describeTile(hit.x, hit.z));
@@ -336,10 +342,91 @@ function updateHover() {
   }
   const check = game.canPlace(tool, hit.x, hit.z);
   setMarker(hit.x, hit.z, size, check.ok);
+  if (!coarse) showGhost(tool, hit.x, hit.z, check.ok);
   if (!coarse || painting) {
     const info = toolInfo(tool);
     ui.tileInfo(`${describeTile(hit.x, hit.z)}<br>${check.ok ? `<span class="ok">✓ ${tool === 'remove' ? `Restore${check.what ? ' ' + escapeHTML(check.what) : ''}` : `${info.name}${check.cost ? ' — $' + check.cost + 'K' : ''}`}</span>` : `<span class="no">✗ ${check.reason}</span>`}`);
   }
+}
+
+// ---------------------------------------------------------------- ghost preview
+const ghost = { group: null, key: '', suppress: '' };
+const ghostMats = new Map();
+const GHOST_BAD = new THREE.Color('#ff5a3c');
+const GHOST_OK = new THREE.Color('#d8ffe0');
+
+function ghostMaterial(m, ok) {
+  const key = m.uuid + (ok ? ':ok' : ':bad');
+  if (!ghostMats.has(key)) {
+    const g = m.clone();
+    g.transparent = true;
+    g.opacity = ok ? 0.62 : 0.5;
+    g.depthWrite = false;
+    if (g.color) g.color = g.color.clone().lerp(ok ? GHOST_OK : GHOST_BAD, ok ? 0.3 : 0.65);
+    g.emissive = new THREE.Color(ok ? '#3fae5c' : '#a3200c');
+    g.emissiveIntensity = ok ? 0.45 : 0.5;
+    g.emissiveMap = null;
+    ghostMats.set(key, g);
+  }
+  return ghostMats.get(key);
+}
+
+function hideGhost() {
+  if (!ghost.group) { ghost.key = ''; return; }
+  scene.remove(ghost.group);
+  ghost.group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+  ghost.group = null;
+  ghost.key = '';
+}
+
+// Translucent preview of a building or wonder, tinted red where it can't go.
+function showGhost(id, x, z, ok) {
+  const info = toolInfo(id);
+  if (info.group !== 'facility' && info.group !== 'landmark') { hideGhost(); return; }
+  const key = `${id}:${x}:${z}:${ok}`;
+  if (ghost.key === key) return;
+  if (ghost.suppress === `${id}:${x}:${z}`) { hideGhost(); return; }
+  ghost.suppress = '';
+  hideGhost();
+  const kind = info.kind || id;
+  const size = info.size || 1;
+  let g;
+  try {
+    g = buildModel(kind, { terrain: game.terrain, x, z, size, rot: game.facingRotation(kind, x, z, size), uniforms, name: game.name });
+  } catch {
+    return;
+  }
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = false;
+    if (!o.material.isShaderMaterial) o.material = ghostMaterial(o.material, ok);
+    o.renderOrder = 7;
+  });
+  g.userData.update = null;
+  g.position.y += 0.05;
+  scene.add(g);
+  ghost.group = g;
+  ghost.key = key;
+}
+
+function animateGhost(time) {
+  if (!ghost.group) return;
+  const pulse = 0.5 + Math.sin(time * 4) * 0.5;
+  ghost.group.traverse((o) => { if (o.isMesh && o.material.transparent && !o.material.isShaderMaterial) o.material.opacity = 0.6 + pulse * 0.25; });
+}
+
+let pendingTap = null;
+
+// Touch devices have no hover: the first tap previews, a second tap on the same spot builds.
+function previewTap(hit) {
+  const check = game.canPlace(tool, hit.x, hit.z);
+  const info = toolInfo(tool);
+  pendingTap = `${tool}:${hit.x}:${hit.z}`;
+  setMarker(hit.x, hit.z, toolSize(tool), check.ok);
+  showGhost(tool, hit.x, hit.z, check.ok);
+  ui.tileInfo(`${describeTile(hit.x, hit.z)}<br>${check.ok
+    ? `<span class="ok">✓ ${info.name}${check.cost ? ' \u2014 $' + check.cost + 'K' : ''}</span><br><b>Tap again to build</b> · tap elsewhere to move`
+    : `<span class="no">✗ ${check.reason}</span>`}`);
 }
 
 function inspect(x, z) {
@@ -418,11 +505,22 @@ function endPointer(e) {
 }
 el.addEventListener('pointerup', endPointer);
 el.addEventListener('pointercancel', endPointer);
-el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { pointer = null; marker.visible = false; } });
+el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { pointer = null; marker.visible = false; hideGhost(); } });
 
 function click(hit) {
   if (tool === 'explore') { inspect(hit.x, hit.z); return; }
+  const group = toolInfo(tool).group;
+  if (coarse && (group === 'facility' || group === 'landmark') && pendingTap !== `${tool}:${hit.x}:${hit.z}`) {
+    previewTap(hit);
+    return;
+  }
+  pendingTap = null;
   const res = game.apply(tool, hit.x, hit.z);
+  if (res.ok) {
+    hideGhost();
+    ghost.suppress = `${tool}:${hit.x}:${hit.z}`;
+    if (coarse) { marker.visible = false; ui.tileInfo(null); }
+  }
   if (res.ok) {
     audio.pluck(tool === 'remove' ? 330 : 560);
     const info = toolInfo(tool);
@@ -548,6 +646,7 @@ function loop() {
   tg.y = THREE.MathUtils.clamp(tg.y, 0, 30);
 
   if (hoverDirty) { hoverDirty = false; updateHover(); }
+  animateGhost(time);
   if (saveSoon > 0) { saveSoon -= dt; if (saveSoon <= 0) writeSave(); }
   if (mode === 'play') {
     autosaveTimer += dt;
