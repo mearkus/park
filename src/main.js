@@ -303,7 +303,7 @@ function startGame(id, save, opts = {}) {
   ui.setSound(audio.on);
   hudDirty = true;
   if (opts.tutorial) {
-    writeSave();
+    if (!save) writeSave();
     tutorial = new Tutorial(game, ui, {
       setBeacon,
       chime: () => audio.sfx('chime', 0.6),
@@ -313,7 +313,7 @@ function startGame(id, save, opts = {}) {
         savePrefs();
         ui.toast('🎓 Tutorial complete. Your park is yours to shape — reopen it any time from the title screen.', 'good', 5000);
       },
-    });
+    }, opts.tutorialStep || 0);
   } else if (!save) {
     writeSave();
     ui.howTo(() => {
@@ -791,6 +791,16 @@ let hudTimer = 0;
 let first = true;
 
 function loop() {
+  requestAnimationFrame(loop);
+  try {
+    frame();
+  } catch (err) {
+    // never let one bad frame stop the game from drawing
+    console.error(err);
+  }
+}
+
+function frame() {
   const now = performance.now();
   const dt = Math.min((now - lastT) / 1000, 0.05);
   lastT = now;
@@ -848,7 +858,6 @@ function loop() {
     l.classList.add('fade');
     setTimeout(() => l.remove(), 900);
   }
-  requestAnimationFrame(loop);
 }
 
 // Auto mode: if frames are slow for a few seconds, drop one quality step.
@@ -940,7 +949,32 @@ function updateSoundscape() {
   }
   audio.setProximity({ waterfall: falls, fire });
 }
-showMenu();
+// If the phone dropped the graphics context, save and reload straight back into the park.
+let recovering = false;
+function recoverGraphics() {
+  if (recovering) return;
+  recovering = true;
+  writeSave();
+  try {
+    sessionStorage.setItem('wild-horizons-resume', JSON.stringify({ play: mode === 'play', tutorial: tutorial ? tutorial.i : -1 }));
+  } catch { /* ignore */ }
+  document.getElementById('lost')?.classList.remove('hidden');
+  setTimeout(() => location.reload(), 900);
+}
+renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); recoverGraphics(); });
+renderer.domElement.addEventListener('webglcontextrestored', () => recoverGraphics());
+
+let resume = null;
+try {
+  resume = JSON.parse(sessionStorage.getItem('wild-horizons-resume'));
+  sessionStorage.removeItem('wild-horizons-resume');
+} catch { resume = null; }
+const resumeSave = resume?.play ? readSave() : null;
+if (resumeSave) {
+  startGame(resumeSave.scn, resumeSave, resume.tutorial >= 0 ? { tutorial: true, tutorialStep: resume.tutorial } : {});
+} else {
+  showMenu();
+}
 requestAnimationFrame(loop);
 
 // ---------------------------------------------------------------- install & offline

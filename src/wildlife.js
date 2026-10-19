@@ -144,6 +144,7 @@ export class Herd {
     while (this.animals.length > want) {
       const a = this.animals.pop();
       this.group.remove(a.mesh);
+      a.mesh.traverse((o) => o.geometry?.dispose()); // materials are shared; geometries are per animal
     }
   }
 
@@ -259,6 +260,7 @@ export class Herd {
 
   dispose() {
     this.ctx.scene.remove(this.group);
+    this.group.traverse((o) => o.geometry?.dispose());
   }
 }
 

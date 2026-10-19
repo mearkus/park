@@ -113,7 +113,7 @@ const STEPS = [
 ];
 
 export class Tutorial {
-  constructor(game, ui, hooks) {
+  constructor(game, ui, hooks, start = 0) {
     this.game = game;
     this.ui = ui;
     this.hooks = hooks; // { setBeacon(tile|null), end() }
@@ -121,7 +121,7 @@ export class Tutorial {
     this.state = {};
     this.el = document.getElementById('coach');
     document.body.classList.add('tutorial');
-    this.go(0);
+    this.go(Math.min(start, STEPS.length - 1));
   }
 
   get step() { return STEPS[this.i]; }
