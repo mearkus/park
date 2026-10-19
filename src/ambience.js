@@ -34,7 +34,7 @@ export class Ambience {
   }
 
   // season: 0 spring 1 summer 2 autumn 3 winter
-  update(dt, time, { target, season, night, snowy, active, mobile }) {
+  update(dt, time, { target, season, night, snowy, active, rate = 1 }) {
     // birds (only by day)
     this.birds.visible = !night;
     if (!night) {
@@ -54,7 +54,6 @@ export class Ambience {
     if (!active) return;
 
     // weather particles spawned around what the camera looks at
-    const rate = mobile ? 0.5 : 1;
     const fx = this.particles;
     const spawn = (n) => {
       this.acc += n * rate * dt;

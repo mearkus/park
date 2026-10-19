@@ -29,6 +29,7 @@ export class Visitors {
       scene.add(m);
     }
     this.scene = scene;
+    this.limit = 1; // crowd scale from the graphics setting
     this.walkers = [];
     this.drivers = [];
     this.refresh = 0;
@@ -140,8 +141,8 @@ export class Visitors {
       const season = game.terrain.season;
       const crowd = (game.visitors / 4000) * SEASON_CROWD[season];
       // a few early explorers even before the crowds arrive
-      this.wantPeople = Math.min(MAX_PEOPLE, Math.max(4, Math.round(crowd)), this.trailTiles.length * 2 + Math.floor(this.roadTiles.length / 2));
-      this.wantCars = Math.min(MAX_CARS, Math.round(game.visitors / 18000 * SEASON_CROWD[season]) + (game.hasVC ? 2 : 1), Math.floor(this.roadTiles.length / 4));
+      this.wantPeople = Math.min(Math.round(MAX_PEOPLE * this.limit), Math.max(4, Math.round(crowd)), this.trailTiles.length * 2 + Math.floor(this.roadTiles.length / 2));
+      this.wantCars = Math.min(Math.round(MAX_CARS * this.limit), Math.round(game.visitors / 18000 * SEASON_CROWD[season]) + (game.hasVC ? 2 : 1), Math.floor(this.roadTiles.length / 4));
     }
     this.walkers = this.step(game, this.walkers, false, dt);
     this.drivers = this.step(game, this.drivers, true, dt);

@@ -20,8 +20,15 @@ const coarse = matchMedia('(pointer: coarse)').matches;
 const quality = { mobile: coarse || Math.min(innerWidth, innerHeight) < 600 };
 quality.high = !quality.mobile;
 
+// Graphics presets. 'auto' starts at medium on phones / high on computers and steps down if slow.
+const GRAPHICS = {
+  low: { label: 'Low', pr: 1, shadows: 0, post: false, fx: 0.3, crowd: 0.35 },
+  medium: { label: 'Medium', pr: 1.5, shadows: 1024, post: true, fx: 0.6, crowd: 0.6 },
+  high: { label: 'High', pr: 2, shadows: 2048, post: true, fx: 1, crowd: 1 },
+};
+const GRAPHICS_ORDER = ['low', 'medium', 'high'];
+
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, quality.mobile ? 1.6 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -55,11 +62,35 @@ const postfx = new PostFX(renderer, scene, camera);
 env.toneComp.uComp.value = 1;
 const ambience = new Ambience(scene, particles);
 const visitors = new Visitors(scene);
+// (graphics are applied once onResize exists — see boot)
 
 let prefs = {};
 try { prefs = JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { prefs = {}; }
 const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
 env.setTime(prefs.time && TIMES[prefs.time] ? prefs.time : 'golden');
+
+let graphicsPref = GRAPHICS[prefs.graphics] || prefs.graphics === 'auto' ? prefs.graphics : 'auto';
+let graphics = 'high';
+function applyGraphics(level) {
+  graphics = level;
+  const G = GRAPHICS[level];
+  renderer.setPixelRatio(Math.min(devicePixelRatio, G.pr));
+  env.sun.castShadow = G.shadows > 0;
+  if (G.shadows && env.sun.shadow.mapSize.x !== G.shadows) {
+    env.sun.shadow.mapSize.set(G.shadows, G.shadows);
+    env.sun.shadow.map?.dispose();
+    env.sun.shadow.map = null;
+  }
+  env.toneComp.uComp.value = G.post ? 1 : 0;
+  visitors.limit = G.crowd;
+  onResize();
+}
+function setGraphicsPref(p) {
+  graphicsPref = p;
+  prefs.graphics = p;
+  savePrefs();
+  applyGraphics(p === 'auto' ? (quality.mobile ? 'medium' : 'high') : p);
+}
 
 // ---------------------------------------------------------------- state
 let game = null;
@@ -128,6 +159,7 @@ const ui = new UI({
   },
   selectTool,
   modalOpen(on) { modalOpen = on; },
+  graphics(after) { graphicsModal(after); },
 });
 
 function setSpeed(s) {
@@ -644,7 +676,7 @@ function loop() {
     visitors.update(dt, time, game);
     ambience.update(dt, time, {
       target: controls.target, season: game.terrain.season, night: env.nightness > 0,
-      snowy: game.scn.winterSnow > 0.3, active: true, mobile: quality.mobile,
+      snowy: game.scn.winterSnow > 0.3, active: true, rate: GRAPHICS[graphics].fx,
     });
   }
   particles.update(dt);
@@ -675,7 +707,8 @@ function loop() {
     }
   }
   postfx.setTilt(mode !== 'play' || tour || document.getElementById('hud').classList.contains('hidden') ? 1 : 0.55);
-  postfx.render(dt);
+  if (GRAPHICS[graphics].post) postfx.render(dt); else renderer.render(scene, camera);
+  watchFrameRate(dt);
   if (first) {
     first = false;
     const l = document.getElementById('loading');
@@ -685,7 +718,40 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
+// Auto mode: if frames are slow for a few seconds, drop one quality step.
+let fpsTime = 0, fpsFrames = 0, fpsSettle = 6;
+function watchFrameRate(dt) {
+  if (graphicsPref !== 'auto' || document.hidden) return;
+  fpsTime += dt; fpsFrames++;
+  if (fpsTime < 4) return;
+  const fps = fpsFrames / fpsTime;
+  fpsTime = 0; fpsFrames = 0;
+  if (fpsSettle > 0) { fpsSettle -= 4; return; }
+  const i = GRAPHICS_ORDER.indexOf(graphics);
+  if (fps < 26 && i > 0) {
+    applyGraphics(GRAPHICS_ORDER[i - 1]);
+    fpsSettle = 6;
+    if (mode === 'play') ui.toast(`⚙️ Graphics lowered to ${GRAPHICS[graphics].label} for smoother play.`, '', 3000);
+  }
+}
+
+function graphicsModal(after) {
+  const opts = ['auto', 'low', 'medium', 'high'];
+  ui.modal(`<div style="font-size:44px">⚙️</div><h2>Graphics</h2>
+    <p>Lower settings run smoother and save battery on phones.</p>
+    <p style="font-size:13px"><b>Auto</b> picks for your device and steps down if things get slow.<br>
+    <b>Low</b>: no shadows or effects · <b>Medium</b>: shadows & miniature look · <b>High</b>: sharpest detail.</p>
+    <p style="font-size:13px">Current: <b>${graphicsPref === 'auto' ? `Auto (${GRAPHICS[graphics].label})` : GRAPHICS[graphicsPref].label}</b></p>`,
+  [...opts.map((o) => ({
+    label: (o === graphicsPref ? '● ' : '') + (o === 'auto' ? 'Auto' : GRAPHICS[o].label),
+    primary: o === graphicsPref,
+    action: () => { setGraphicsPref(o); fpsSettle = 6; after?.(); },
+  })), { label: 'Close', action: after }]);
+}
+
 // ---------------------------------------------------------------- boot
+setGraphicsPref(graphicsPref);
+document.getElementById('graphicsBtn').onclick = () => graphicsModal();
 audio.night = env.key === 'night';
 ui.setSound(false);
 showMenu();

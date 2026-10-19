@@ -324,3 +324,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .scn p { font-size: 12px; }
   .menu-actions .btn { flex: 1; padding: 13px 10px; }
 }
+
+#graphicsBtn { flex: none !important; width: 52px; padding: 13px 0; font-size: 18px; }

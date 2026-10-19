@@ -307,6 +307,7 @@ export class UI {
     this.modal(`<h2>Paused</h2><p>Your park is saved automatically on this device.</p>`, [
       { label: 'Resume', primary: true, action: () => this.h.setSpeed(1) },
       { label: 'How to play', action: () => this.howTo(() => this.h.setSpeed(1)) },
+      { label: '⚙️ Graphics', action: () => this.h.graphics(() => this.h.setSpeed(1)) },
       { label: 'Save & exit to title', action: () => this.h.quit() },
     ]);
   }
