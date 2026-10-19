@@ -4,6 +4,7 @@ import { Vegetation } from './vegetation.js';
 import { createWater } from './water.js';
 import { buildModel } from './models.js';
 import { Herd } from './wildlife.js';
+import { Roads } from './roads.js';
 import { LANDMARKS, SPECIES, SCENARIO_BY_ID } from './scenarios.js';
 import { clamp } from './noise.js';
 
@@ -113,6 +114,7 @@ export class Game {
     this.water = createWater(this.terrain, world.env);
     world.scene.add(this.water);
     this.vegetation = new Vegetation(world.scene, this.terrain, this.scn, world.uniforms);
+    this.roads = new Roads(world.scene, this.terrain);
 
     this.funds = save?.funds ?? 800;
     this.level = save?.level ?? 0;
@@ -134,6 +136,7 @@ export class Game {
     }
     if (save?.herds) for (const h of save.herds) this.addHerd(h.species, h.x, h.z, h.pop);
 
+    this.roads.entrance = this.entrance;
     this.applySeasonVisuals(true);
     this.recompute();
   }
@@ -345,6 +348,17 @@ export class Game {
     if (this.landmarkCount >= 1) grant('m-lm', 50, 'Word of your first protected wonder spread \u2014 a conservation society donated');
     if (this.herds.length >= 1) grant('m-herd', 40, 'Wildlife groups celebrated the reintroduction and donated');
     if (this.connectedLandmarks >= 2) grant('m-trail', 50, 'Hikers love your trails! The Friends of the Park donated');
+  }
+
+  // Revert tiles painted in an accidental stroke and refund them.
+  undoPaint(list) {
+    const t = this.terrain;
+    for (const p of list.reverse()) {
+      t.type[p.i] = p.prev;
+      this.funds += p.cost;
+    }
+    this.dirtyColors = this.dirtyVeg = true;
+    this.recompute();
   }
 
   refreshHerdsAndModels() {
@@ -856,7 +870,7 @@ export class Game {
   // ---- per-frame -------------------------------------------------------------
   update(dt, time) {
     if (this.dirtyColors) { this.terrain.updateColors(); this.dirtyColors = false; }
-    if (this.dirtyVeg) { this.vegetation.rebuild(); this.dirtyVeg = false; }
+    if (this.dirtyVeg) { this.vegetation.rebuild(); this.roads.rebuild(); this.dirtyVeg = false; }
     const fx = this.world.particles;
     this.water.userData.update(dt, time);
     for (const e of this.entities.values()) {
@@ -913,6 +927,7 @@ export class Game {
     for (const e of this.entities.values()) scene.remove(e.mesh);
     for (const h of this.herds) h.dispose();
     this.vegetation.dispose();
+    this.roads.dispose();
     scene.remove(this.water);
     this.water.geometry.dispose();
     this.water.material.dispose();

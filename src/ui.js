@@ -167,7 +167,7 @@ export class UI {
     if (cat && cat.id !== this.cat) this.showCat(cat.id);
     $('#tools').querySelectorAll('.tool').forEach((b) => b.classList.toggle('on', b.dataset.tool === id));
     const info = toolInfo(id);
-    const hint = info.paint ? (matchMedia('(pointer: coarse)').matches ? 'Drag one finger to paint · two fingers to look around.' : 'Drag to paint · right-drag to orbit.') : id === 'explore' ? '' : info.group === 'facility' || info.group === 'landmark' ? (matchMedia('(pointer: coarse)').matches ? 'Tap to preview, tap again to build.' : 'Move to preview, click to build.') : 'Tap a spot to place.';
+    const hint = info.paint ? (matchMedia('(pointer: coarse)').matches ? 'Drag one finger to paint · two fingers to move, pinch to zoom, twist to turn.' : 'Drag to paint · right-drag to orbit.') : id === 'explore' ? '' : info.group === 'facility' || info.group === 'landmark' ? (matchMedia('(pointer: coarse)').matches ? 'Tap to preview, tap again to build.' : 'Move to preview, click to build.') : 'Tap a spot to place.';
     $('#toolcard').innerHTML = `<div class="big">${info.icon}</div><div><div class="t">${info.name}${info.cost ? `<span class="cost">$${info.cost}K${info.paint ? ' per tile' : ''}</span>` : ''}</div>
       <div class="d">${info.desc || ''} ${hint ? `<span style="opacity:.7">${hint}</span>` : ''}</div>${info.fact ? `<div class="f">${info.fact}</div>` : ''}</div>`;
   }
