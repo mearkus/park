@@ -354,3 +354,6 @@ body.tutorial #toasts { top: calc(250px + var(--safe-top)); }
   body.tutorial #tileinfo { top: auto; bottom: calc(220px + var(--safe-bottom)); }
   body.tutorial #goals { top: calc(300px + var(--safe-top)); max-height: calc(100% - 520px - var(--safe-top)); min-height: 150px; }
 }
+
+#lost { position: absolute; inset: 0; z-index: 60; display: grid; place-content: center; gap: 16px; text-align: center; background: #1b2f27; font-family: var(--display); font-size: 18px; }
+#lost .sun { width: 60px; height: 60px; border-radius: 50%; margin: 0 auto; background: radial-gradient(circle, #fff3c4, #f6c35b 60%, #e9773f); box-shadow: 0 0 50px #f6c35b; }
