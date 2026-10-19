@@ -572,5 +572,34 @@ ui.setSound(false);
 showMenu();
 requestAnimationFrame(loop);
 
+// ---------------------------------------------------------------- install & offline
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => { /* offline support unavailable */ }));
+}
+const installBtn = document.getElementById('install');
+const standalone = matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone;
+let deferredInstall = null;
+addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  installBtn.classList.remove('hidden');
+});
+addEventListener('appinstalled', () => {
+  installBtn.classList.add('hidden');
+  ui.toast('🏕️ Installed! Wild Horizons now works offline.', 'good');
+});
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (isIOS && !standalone) installBtn.classList.remove('hidden');
+installBtn.onclick = async () => {
+  if (deferredInstall) {
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+    installBtn.classList.add('hidden');
+  } else {
+    ui.modal(`<div style="font-size:48px">📲</div><h2>Install Wild Horizons</h2><p>In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>. The game will open full screen and play offline.</p>`, [{ label: 'Got it', primary: true }]);
+  }
+};
+
 // Debug/automation hook
 window.__park = { get game() { return game; }, startGame, selectTool, setSpeed, camera, controls, env, fmtMoney };
