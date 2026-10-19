@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { N, T, TILE } from './terrain.js';
 import { hash2 } from './noise.js';
+import { textures } from './textures.js';
 
 const MAX_TREES = N * N * 3;
 
@@ -124,7 +125,7 @@ export class Vegetation {
 
     // rocks
     this.rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.5, 0),
-      new THREE.MeshStandardMaterial({ color: scn.rock, flatShading: true, roughness: 0.95 }), N * N);
+      new THREE.MeshStandardMaterial({ color: scn.rock, flatShading: true, roughness: 0.95, map: textures().speckle }), N * N);
     this.rocks.castShadow = true;
     this.rocks.receiveShadow = true;
     this.rocks.count = 0;
@@ -132,7 +133,7 @@ export class Vegetation {
 
     // boardwalks & bridges
     this.decks = new THREE.InstancedMesh(new THREE.BoxGeometry(T * 1.0, 0.18, T * 0.55),
-      new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.8 }), N * N);
+      new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.8, map: textures().planks }), N * N);
     this.decks.castShadow = true;
     this.decks.receiveShadow = true;
     this.decks.count = 0;

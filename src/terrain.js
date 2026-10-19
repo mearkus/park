@@ -119,7 +119,9 @@ export class Terrain {
 
     // Diorama sides
     this.sideGeo = new THREE.BufferGeometry();
-    this.side = new THREE.Mesh(this.sideGeo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+    const sideMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
+    this.injectSnow(sideMat);
+    this.side = new THREE.Mesh(this.sideGeo, sideMat);
     this.side.receiveShadow = true;
     scene.add(this.side);
 
@@ -143,21 +145,39 @@ export class Terrain {
     this.updateColors();
   }
 
+  // Adds procedural surface detail (grain, grass speckle, rock strata, snow) to the flat-shaded ground.
   injectSnow(mat) {
     const U = this.uniforms;
     mat.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, U);
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying float vWY;\nvarying float vNY;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWY = (modelMatrix * vec4(position,1.0)).y;\nvNY = normalize(mat3(modelMatrix) * objectNormal).y;');
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWP;\nvarying float vNY;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWP = (modelMatrix * vec4(position,1.0)).xyz;\nvNY = normalize(mat3(modelMatrix) * objectNormal).y;');
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vWY;\nvarying float vNY;\nuniform float uSnow;\nuniform float uSnowLine;\nuniform float uWaterLevel;')
+        .replace('#include <common>', `#include <common>
+          varying vec3 vWP; varying float vNY;
+          uniform float uSnow; uniform float uSnowLine; uniform float uWaterLevel;
+          float th(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float tn(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); f = f*f*(3.0-2.0*f);
+            return mix(mix(th(i), th(i+vec2(1,0)), f.x), mix(th(i+vec2(0,1)), th(i+vec2(1,1)), f.x), f.y); }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
-          float permanent = smoothstep(uSnowLine - 3.0, uSnowLine + 2.0, vWY);
-          float seasonal = uSnow * smoothstep(uWaterLevel + 0.4, uWaterLevel + 1.6, vWY);
-          float snow = max(permanent, seasonal) * smoothstep(0.45, 0.78, vNY);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 1.0), snow);
-          float wet = 1.0 - smoothstep(uWaterLevel - 0.6, uWaterLevel + 0.15, vWY);
+          float flatK = smoothstep(0.55, 0.85, vNY);
+          // soft mottling everywhere
+          float mott = tn(vWP.xz * 0.35) * 0.6 + tn(vWP.xz * 1.1) * 0.4;
+          diffuseColor.rgb *= 0.9 + mott * 0.2;
+          // grass / ground speckle on flats
+          float sp = th(floor(vWP.xz * 6.0));
+          diffuseColor.rgb *= 1.0 + flatK * (step(0.86, sp) * 0.07 - step(sp, 0.1) * 0.06);
+          // rock strata on steep faces and diorama sides
+          float strata = sin(vWP.y * 3.4 + tn(vWP.xz * 0.4 + vWP.y * 0.1) * 4.0) * 0.5 + 0.5;
+          float cracks = smoothstep(0.92, 1.0, tn(vec2(vWP.x + vWP.z, vWP.y * 2.5) * 1.7));
+          diffuseColor.rgb *= 1.0 - (1.0 - flatK) * (strata * 0.13 + cracks * 0.18);
+          float permanent = smoothstep(uSnowLine - 3.0, uSnowLine + 2.0, vWP.y);
+          float seasonal = uSnow * smoothstep(uWaterLevel + 0.4, uWaterLevel + 1.6, vWP.y);
+          float snow = max(permanent, seasonal) * smoothstep(0.45, 0.78, vNY) * (0.85 + tn(vWP.xz * 0.8) * 0.3);
+          vec3 snowCol = vec3(0.93, 0.95, 1.0) * (0.97 + step(0.985, th(floor(vWP.xz * 14.0))) * 0.25);
+          diffuseColor.rgb = mix(diffuseColor.rgb, snowCol, clamp(snow, 0.0, 1.0));
+          float wet = 1.0 - smoothstep(uWaterLevel - 0.6, uWaterLevel + 0.15, vWP.y);
           diffuseColor.rgb *= 1.0 - wet * 0.35;`);
     };
   }
