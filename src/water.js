@@ -62,7 +62,7 @@ export function createWater(terrain, env) {
         vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
         vec3 V = normalize(cameraPosition - vW);
         float fres = pow(1.0 - max(dot(n, V), 0.0), 4.0);
-        vec3 col = mix(uShallow, uDeep, smoothstep(0.2, 7.0, depth));
+        vec3 col = mix(uShallow, uDeep, smoothstep(0.2, 7.0, depth)) * (1.0 - uNight * 0.78);
         col = mix(col, uSky, clamp(fres*0.85 + 0.08, 0.0, 1.0));
         vec3 R = reflect(-uSunDir, n);
         float spec = pow(max(dot(R, V), 0.0), 140.0);

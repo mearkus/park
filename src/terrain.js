@@ -208,6 +208,16 @@ export class Terrain {
         this.scn.groundColor(ctx, tmpC);
         if (t === TILE.FOREST && ctx.rel >= 0) tmpC.multiplyScalar(0.72).lerp(tmpC2.set('#3f5a2c'), 0.25);
         if (t === TILE.MEADOW && ctx.rel >= 0) tmpC.lerp(tmpC2.set(this.season === 2 ? '#b8a24a' : this.season === 3 ? '#8f8b6c' : '#79b34c'), 0.6);
+        // cavity shading: valleys a touch darker, ridges a touch lighter
+        if (ctx.rel >= 0) {
+          let sum = 0, n = 0;
+          for (let dz = -2; dz <= 2; dz += 2) for (let dx = -2; dx <= 2; dx += 2) {
+            const nx = x + dx, nz = z + dz;
+            if ((dx || dz) && this.inBounds(nx, nz)) { sum += this.tileH(nx, nz); n++; }
+          }
+          const cav = clamp((ctx.h - sum / n) * 0.035, -0.16, 0.1);
+          tmpC.multiplyScalar(1 + cav);
+        }
         const ov = OVERLAY[t];
         if (ov && !(ctx.rel < 0 && (t === TILE.TRAIL || t === TILE.ROAD))) tmpC.lerp(ov[0], ov[1]);
         for (let k = 0; k < 2; k++) {

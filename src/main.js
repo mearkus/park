@@ -8,6 +8,9 @@ import { HALF, TILE, N } from './terrain.js';
 import { syncMaterials, buildModel } from './models.js';
 import { UI, escapeHTML } from './ui.js';
 import { Audio } from './audio.js';
+import { PostFX } from './postfx.js';
+import { Ambience } from './ambience.js';
+import { Visitors } from './visitors.js';
 
 const SAVE_KEY = 'wild-horizons-save-v1';
 const PREF_KEY = 'wild-horizons-prefs-v1';
@@ -48,6 +51,10 @@ const particles = new Particles(scene, quality.mobile ? 2200 : 4000);
 const uniforms = { uTime: { value: 0 } };
 const world = { scene, particles, env, uniforms };
 const audio = new Audio();
+const postfx = new PostFX(renderer, scene, camera);
+env.toneComp.uComp.value = 1;
+const ambience = new Ambience(scene, particles);
+const visitors = new Visitors(scene);
 
 let prefs = {};
 try { prefs = JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { prefs = {}; }
@@ -156,6 +163,7 @@ function selectTool(id) {
 function loadWorld(id, save = null) {
   hideGhost();
   pendingTap = null;
+  visitors.reset();
   if (game) game.dispose();
   game = new Game(world, id, save);
   hookGame(game);
@@ -604,6 +612,7 @@ addEventListener('pagehide', writeSave);
 
 function onResize() {
   renderer.setSize(innerWidth, innerHeight);
+  postfx.setSize(innerWidth, innerHeight, renderer.getPixelRatio());
   camera.aspect = innerWidth / innerHeight;
   camera.fov = innerWidth < innerHeight ? 55 : 42;
   camera.updateProjectionMatrix();
@@ -630,6 +639,13 @@ function loop() {
   if (game) {
     if (mode === 'play' && !modalOpen) game.advance(dt, speed);
     game.update(dt, time);
+  }
+  if (game) {
+    visitors.update(dt, time, game);
+    ambience.update(dt, time, {
+      target: controls.target, season: game.terrain.season, night: env.nightness > 0,
+      snowy: game.scn.winterSnow > 0.3, active: true, mobile: quality.mobile,
+    });
   }
   particles.update(dt);
   keyboardPan(dt);
@@ -658,7 +674,8 @@ function loop() {
       hudTimer = 0.5;
     }
   }
-  renderer.render(scene, camera);
+  postfx.setTilt(mode !== 'play' || tour || document.getElementById('hud').classList.contains('hidden') ? 1 : 0.55);
+  postfx.render(dt);
   if (first) {
     first = false;
     const l = document.getElementById('loading');
@@ -704,4 +721,4 @@ installBtn.onclick = async () => {
 };
 
 // Debug/automation hook
-window.__park = { get game() { return game; }, startGame, selectTool, setSpeed, camera, controls, env, fmtMoney };
+window.__park = { postfx, visitors, get game() { return game; }, startGame, selectTool, setSpeed, camera, controls, env, fmtMoney };
