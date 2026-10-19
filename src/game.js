@@ -745,7 +745,7 @@ export class Game {
   advance(dt, speed) {
     if (!speed) return;
     this.monthClock += dt * speed;
-    const secondsPerMonth = 4;
+    const secondsPerMonth = 10; // a year lasts two minutes at normal speed
     while (this.monthClock >= secondsPerMonth) {
       this.monthClock -= secondsPerMonth;
       this.monthTick();
