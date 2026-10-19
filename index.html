@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1b2f27" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Shape a wild landscape into a National Park. A 3D park-building game for web and mobile." />
+    <title>Wild Horizons — Build a National Park</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f2c46d'/%3E%3Cpath d='M4 50 L24 22 L34 36 L42 26 L60 50Z' fill='%232f5a43'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="scene"></div>
+
+      <div id="loading">
+        <div class="sun"></div>
+        <p>Surveying the land…</p>
+      </div>
+
+      <!-- Title / scenario menu -->
+      <section id="menu" class="hidden">
+        <div class="menu-inner">
+          <div class="brand">
+            <div class="eyebrow">A national park building game</div>
+            <h1>Wild Horizons</h1>
+            <p class="tagline">Shape the land. Protect its wonders. Earn National Park status.</p>
+          </div>
+          <div id="continue" class="continue hidden"></div>
+          <h2 class="pick">Choose your landscape</h2>
+          <div id="scenarios" class="scenarios"></div>
+          <div class="menu-actions">
+            <button id="start" class="btn primary">Begin your park</button>
+            <button id="howto" class="btn ghost">How to play</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- In-game HUD -->
+      <section id="hud" class="hidden">
+        <header id="topbar" class="glass">
+          <div class="park-id">
+            <div id="badge" class="badge"></div>
+            <div class="names">
+              <input id="parkName" maxlength="28" spellcheck="false" aria-label="Park name" />
+              <div id="levelName" class="sub">Unprotected Land</div>
+            </div>
+          </div>
+          <div class="clock">
+            <div id="date">Apr · Year 1</div>
+            <div class="speed" role="group" aria-label="Game speed">
+              <button data-speed="0" title="Pause (Space)">❚❚</button>
+              <button data-speed="1" title="Normal speed">▶</button>
+              <button data-speed="3" title="Fast">▶▶</button>
+              <button data-speed="8" title="Fastest">▶▶▶</button>
+            </div>
+          </div>
+          <div class="money">
+            <div class="stat"><span class="lbl">Funds</span><b id="funds">$500K</b><span id="net" class="delta"></span></div>
+            <div class="stat"><span class="lbl">Visitors / yr</span><b id="visitors">0</b></div>
+          </div>
+        </header>
+
+        <aside id="scores" class="glass"></aside>
+
+        <aside id="goals" class="glass panel">
+          <div class="panel-head">
+            <h3>Road to National Park</h3>
+            <button class="icon-btn close" data-close="goals" aria-label="Close">✕</button>
+          </div>
+          <ol id="ladder"></ol>
+          <div id="reqs"></div>
+          <button id="petition" class="btn primary small" disabled>Petition</button>
+          <h4>Honors</h4>
+          <div id="honors"></div>
+        </aside>
+
+        <div id="side">
+          <button class="icon-btn glass" id="btnGoals" title="Goals (G)">📜</button>
+          <button class="icon-btn glass" id="btnTime" title="Time of day (T)">🌅</button>
+          <button class="icon-btn glass" id="btnTour" title="Cinematic tour (C)">🎥</button>
+          <button class="icon-btn glass" id="btnPhoto" title="Photo mode (P)">📷</button>
+          <button class="icon-btn glass" id="btnSound" title="Sound (M)">🔈</button>
+          <button class="icon-btn glass" id="btnMenu" title="Menu">☰</button>
+        </div>
+
+        <div id="tileinfo" class="glass hidden"></div>
+
+        <footer id="dock">
+          <div id="toolcard" class="glass"></div>
+          <div class="glass dock-bar">
+            <nav id="cats"></nav>
+            <div id="tools"></div>
+          </div>
+        </footer>
+      </section>
+
+      <button id="exitPhoto" class="btn ghost hidden">Exit photo mode</button>
+      <div id="modal" class="hidden"><div class="modal-card glass"></div></div>
+      <div id="toasts"></div>
+      <div id="confetti"></div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
