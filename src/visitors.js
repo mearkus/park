@@ -107,7 +107,7 @@ export class Visitors {
     const wz = z0 + (z1 - z0) * a.t + dx * a.lane;
     const tile = t.tileAt(wx, wz) || { x: a.x, z: a.z };
     const wet = t.isWater(tile.x, tile.z);
-    const y = wet ? t.wl + (car ? 0.75 : 0.37) : t.heightAt(wx, wz) + 0.02;
+    const y = wet ? t.wl + (car ? 0.8 : 0.42) : t.heightAt(wx, wz) + (car ? 0.12 : 0.08);
     const bob = car ? 0 : Math.abs(Math.sin(time * 7 + a.phase)) * 0.05 * (a.pause > 0 ? 0 : 1);
     this.q.setFromAxisAngle(this.up, Math.atan2(-dz, dx));
     this.m.compose(this.v.set(wx, y + bob, wz), this.q, this.s);

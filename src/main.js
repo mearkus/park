@@ -189,7 +189,7 @@ function selectTool(id) {
   controls.mouseButtons.LEFT = paint ? -1 : THREE.MOUSE.ROTATE;
   controls.mouseButtons.RIGHT = paint ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
   controls.touches.ONE = paint ? -1 : THREE.TOUCH.ROTATE;
-  controls.touches.TWO = paint ? THREE.TOUCH.DOLLY_ROTATE : THREE.TOUCH.DOLLY_PAN;
+  controls.touches.TWO = THREE.TOUCH.DOLLY_PAN; // two fingers always drag + pinch (twist rotates, see below)
   updateHover();
 }
 
@@ -560,37 +560,98 @@ el.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); });
 document.addEventListener('selectstart', (e) => { if (e.target.tagName !== 'INPUT') e.preventDefault(); });
 
+// Two-finger twist rotates the view (OrbitControls handles two-finger drag + pinch).
+const touchPts = new Map();
+let twistAngle = null;
+function touchAngle() {
+  const [a, b] = [...touchPts.values()];
+  return Math.atan2(b.y - a.y, b.x - a.x);
+}
+
+// Touch painting waits for a clear one-finger drag, so two-finger navigation never paints by accident.
+let pendingPaint = null;
+let stroke = null;
+
+function beginStroke() {
+  painting = true;
+  lastPaint = null;
+  paintFailShown = false;
+  stroke = { t: performance.now(), tiles: [] };
+}
+
+function cancelStroke(undo) {
+  if (undo && stroke && stroke.tiles.length && performance.now() - stroke.t < 600) {
+    game.undoPaint(stroke.tiles);
+    hoverDirty = true;
+  }
+  painting = false;
+  pendingPaint = null;
+  stroke = null;
+}
+
 el.addEventListener('pointerdown', (e) => {
   activePointers.add(e.pointerId);
+  if (e.pointerType !== 'mouse') {
+    touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touchPts.size === 2) twistAngle = touchAngle();
+  }
   pointer = { x: e.clientX, y: e.clientY };
   if (mode !== 'play' || modalOpen) return;
   if (tour) setTour(false);
+  if (activePointers.size > 1) {
+    // a second finger means "navigate": drop any pending or fresh stroke
+    cancelStroke(true);
+    down = null;
+    return;
+  }
   down = { x: e.clientX, y: e.clientY, t: performance.now(), button: e.button };
   const paint = toolInfo(tool).paint;
-  if (paint && activePointers.size === 1 && (e.pointerType !== 'mouse' || e.button === 0)) {
-    painting = true;
-    lastPaint = null;
-    paintFailShown = false;
-    paintAtPointer();
-  } else if (activePointers.size > 1) {
-    painting = false;
+  if (!paint) return;
+  if (e.pointerType === 'mouse') {
+    if (e.button === 0) { beginStroke(); paintAtPointer(); }
+  } else {
+    pendingPaint = { x: e.clientX, y: e.clientY };
   }
 });
 
 el.addEventListener('pointermove', (e) => {
   pointer = { x: e.clientX, y: e.clientY };
-  if (painting) {
-    if (activePointers.size > 1) { painting = false; return; }
-    paintAtPointer();
+  if (touchPts.has(e.pointerId)) {
+    touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touchPts.size === 2 && twistAngle !== null) {
+      const a = touchAngle();
+      let d = a - twistAngle;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      twistAngle = a;
+      if (Math.abs(d) > 0.002 && mode === 'play') {
+        const off = camera.position.clone().sub(controls.target).applyAxisAngle(camera.up, -d);
+        camera.position.copy(controls.target).add(off);
+      }
+    }
   }
+  if (activePointers.size > 1) { if (painting || pendingPaint) cancelStroke(true); hoverDirty = true; return; }
+  if (pendingPaint && Math.hypot(e.clientX - pendingPaint.x, e.clientY - pendingPaint.y) > 10) {
+    const start = pendingPaint;
+    pendingPaint = null;
+    beginStroke();
+    const now = pointer;
+    pointer = start;
+    paintAtPointer();
+    pointer = now;
+  }
+  if (painting) paintAtPointer();
   hoverDirty = true;
 });
 
 function endPointer(e) {
   activePointers.delete(e.pointerId);
+  touchPts.delete(e.pointerId);
+  if (touchPts.size < 2) twistAngle = null;
   if (mode !== 'play') return;
+  pendingPaint = null;
   const wasPainting = painting;
   painting = false;
+  stroke = null;
   if (wasPainting) { writeSaveSoon(); return; }
   if (!down || modalOpen) return;
   const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
@@ -656,7 +717,13 @@ function paintAtPointer() {
   let placed = 0;
   for (const [x, z] of steps) {
     const res = game.canPlace(tool, x, z);
-    if (res.ok) { game.apply(tool, x, z); placed++; }
+    if (res.ok) {
+      const i = game.terrain.idx(x, z);
+      const prev = game.terrain.type[i];
+      game.apply(tool, x, z);
+      stroke?.tiles.push({ i, prev, cost: res.cost });
+      placed++;
+    }
     else if (res.reason?.startsWith('Need') && !paintFailShown) { ui.toast(`✗ ${res.reason}`, 'warn', 2000); paintFailShown = true; }
   }
   if (placed) audio.sfx('paint', 0.8);
