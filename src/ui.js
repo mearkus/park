@@ -156,7 +156,8 @@ export class UI {
       b.className = 'tool' + (t === this.tool ? ' on' : '');
       b.dataset.tool = t;
       b.innerHTML = `<span class="e">${info.icon}</span><span class="n">${info.name}</span>${info.cost ? `<span class="c">$${info.cost}K${info.paint ? '/tile' : ''}</span>` : ''}`;
-      b.onclick = () => this.h.selectTool(t);
+      // tapping the active tool again puts it down (back to Explore)
+      b.onclick = () => this.h.selectTool(t === this.tool && t !== 'explore' ? 'explore' : t);
       tools.appendChild(b);
     }
   }
@@ -164,7 +165,8 @@ export class UI {
   selectTool(id) {
     this.tool = id;
     const cat = this.cats.find((c) => c.tools.includes(id));
-    if (cat && cat.id !== this.cat) this.showCat(cat.id);
+    // stay on the current tab when a tool is put down
+    if (cat && cat.id !== this.cat && id !== 'explore') this.showCat(cat.id);
     $('#tools').querySelectorAll('.tool').forEach((b) => b.classList.toggle('on', b.dataset.tool === id));
     const info = toolInfo(id);
     const hint = info.paint ? (matchMedia('(pointer: coarse)').matches ? 'Drag one finger to paint · two fingers to move, pinch to zoom, twist to turn.' : 'Drag to paint · right-drag to orbit.') : id === 'explore' ? '' : info.group === 'facility' || info.group === 'landmark' ? (matchMedia('(pointer: coarse)').matches ? 'Tap to preview, tap again to build.' : 'Move to preview, click to build.') : 'Tap a spot to place.';
