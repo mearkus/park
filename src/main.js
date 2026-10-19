@@ -11,6 +11,7 @@ import { Audio } from './audio.js';
 import { PostFX } from './postfx.js';
 import { Ambience } from './ambience.js';
 import { Visitors } from './visitors.js';
+import { Tutorial } from './tutorial.js';
 
 const SAVE_KEY = 'wild-horizons-save-v1';
 const PREF_KEY = 'wild-horizons-prefs-v1';
@@ -119,7 +120,13 @@ const ui = new UI({
     savePrefs();
     loadWorld(id);
   },
-  start() { startGame(menuScenario, null); },
+  start() {
+    if (prefs.tutorialDone) { startGame(menuScenario, null); return; }
+    ui.modal(`<div style="font-size:52px">🎓</div><h2>New to Wild Horizons?</h2><p>A short guided tutorial shows you how to build your first park and earn State Park status.</p>`, [
+      { label: 'Play the tutorial', primary: true, action: () => startTutorial() },
+      { label: 'Skip — just build', action: () => { prefs.tutorialDone = true; savePrefs(); startGame(menuScenario, null); } },
+    ]);
+  },
   continueGame() {
     const s = readSave();
     if (s) startGame(s.scn, s);
@@ -221,9 +228,12 @@ function hookGame(g) {
     ui.toast(msg, '', 3000);
   });
   g.on('change', () => { hudDirty = true; });
+  g.on('month', () => tutorial?.update());
 }
 
 function showMenu() {
+  endTutorial();
+  beacon.visible = false;
   mode = 'menu';
   setTour(false);
   ui.showHUD(false);
@@ -239,7 +249,49 @@ function showMenu() {
   frameCamera(true);
 }
 
-function startGame(id, save) {
+// ---------------------------------------------------------------- tutorial
+let tutorial = null;
+const beacon = new THREE.Group();
+{
+  const gold = new THREE.MeshBasicMaterial({ color: '#ffd36b', transparent: true, opacity: 0.95, depthTest: false });
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.8, 4), gold);
+  arrow.rotation.x = Math.PI;
+  arrow.position.y = 3.2;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 32), new THREE.MeshBasicMaterial({ color: '#ffd36b', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.25;
+  beacon.add(arrow, ring);
+  beacon.userData = { arrow, ring };
+  beacon.renderOrder = 20;
+  beacon.visible = false;
+  scene.add(beacon);
+}
+function setBeacon(tile) {
+  if (!tile || !game) { beacon.visible = false; return; }
+  const t = game.terrain;
+  beacon.position.set(t.cx(tile.x), Math.max(t.tileH(tile.x, tile.z), t.wl), t.cz(tile.z));
+  beacon.visible = true;
+}
+function animateBeacon(time) {
+  if (!beacon.visible) return;
+  beacon.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(beacon.position) / 45, 1, 4));
+  beacon.userData.arrow.position.y = 3.2 + Math.sin(time * 3) * 0.5;
+  beacon.userData.arrow.rotation.y = time * 1.5;
+  const k = (time * 0.8) % 1;
+  beacon.userData.ring.scale.setScalar(0.6 + k * 1.2);
+  beacon.userData.ring.material.opacity = 0.9 * (1 - k);
+}
+function endTutorial() {
+  if (!tutorial) return;
+  tutorial.dispose();
+  tutorial = null;
+}
+function startTutorial() {
+  startGame('caldera', null, { tutorial: true });
+}
+
+function startGame(id, save, opts = {}) {
+  endTutorial();
   menuScenario = id;
   loadWorld(id, save);
   mode = 'play';
@@ -252,7 +304,19 @@ function startGame(id, save) {
   frameCamera(false);
   if (prefs.sound !== false) { const on = audio.toggle(true); ui.setSound(on); }
   hudDirty = true;
-  if (!save) {
+  if (opts.tutorial) {
+    writeSave();
+    tutorial = new Tutorial(game, ui, {
+      setBeacon,
+      chime: () => audio.chime(),
+      end: () => {
+        tutorial = null;
+        prefs.tutorialDone = true;
+        savePrefs();
+        ui.toast('🎓 Tutorial complete. Your park is yours to shape — reopen it any time from the title screen.', 'good', 5000);
+      },
+    });
+  } else if (!save) {
     writeSave();
     ui.howTo(() => {
       ui.toast(`🏞️ Welcome to ${escapeHTML(game.scn.name)}, inspired by ${game.scn.inspired}. Start by building a <b>road</b> and a <b>Visitor Center</b>.`, 'good', 7000);
@@ -695,6 +759,7 @@ function loop() {
 
   if (hoverDirty) { hoverDirty = false; updateHover(); }
   animateGhost(time);
+  animateBeacon(time);
   if (saveSoon > 0) { saveSoon -= dt; if (saveSoon <= 0) writeSave(); }
   if (mode === 'play') {
     autosaveTimer += dt;
@@ -702,6 +767,7 @@ function loop() {
     hudTimer -= dt;
     if (hudDirty || hudTimer < 0) {
       ui.update(game);
+      tutorial?.update();
       hudDirty = false;
       hudTimer = 0.5;
     }
@@ -752,6 +818,7 @@ function graphicsModal(after) {
 // ---------------------------------------------------------------- boot
 setGraphicsPref(graphicsPref);
 document.getElementById('graphicsBtn').onclick = () => graphicsModal();
+document.getElementById('tutorialBtn').onclick = () => startTutorial();
 audio.night = env.key === 'night';
 ui.setSound(false);
 showMenu();
