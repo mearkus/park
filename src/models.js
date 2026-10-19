@@ -284,7 +284,7 @@ const BUILDERS = {
         if (erupt <= 0) { column.visible = false; timer = 14 + Math.random() * 14; }
       } else {
         timer -= dt;
-        if (timer < 0) erupt = 5;
+        if (timer < 0) { erupt = 5; g.userData.erupted = true; }
         if (steam < 0 && fx) {
           steam = 0.18;
           fx.emit({ x: top.x, y: top.y, z: top.z, vy: 1.2, spread: 0.6, life: 3, size: 0.6, grow: 0.9, color: [1, 1, 1], alpha: 0.45, drag: 0.3 });

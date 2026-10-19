@@ -151,12 +151,7 @@ const ui = new UI({
     marker.visible = false;
     if (on) { setTour(false); controls.autoRotate = false; }
   },
-  toggleSound() {
-    const on = audio.toggle();
-    prefs.sound = on;
-    savePrefs();
-    ui.setSound(on);
-  },
+  toggleSound() { soundModal(); },
   petition() {
     if (game?.petition()) writeSave();
   },
@@ -214,18 +209,20 @@ function hookGame(g) {
   g.on('eligible', (lvl) => {
     if (mode !== 'play') return;
     ui.toast(`📜 Your park now qualifies for <b>${LEVELS[lvl].name}</b> status! Open goals and petition.`, 'good', 7000);
-    audio.chime();
+    audio.sfx('chime');
     ui.toggleGoals(true);
   });
   g.on('designated', (lvl) => {
-    audio.chime();
+    audio.sfx('fanfare');
     ui.ceremony(lvl, g, () => setTour(true));
   });
-  g.on('honor', (id) => { audio.chime(); ui.honor(id); });
+  g.on('honor', (id) => { audio.sfx('fanfare'); ui.honor(id); });
+  g.on('donation', () => audio.sfx('coin'));
   g.on('year', (year, visitors) => ui.toast(`🗓️ Year ${year - 1} complete — ${fmtVisitors(visitors)} visitors explored ${escapeHTML(g.name)}.`, '', 5000));
   g.on('season', (s) => {
     const msg = ['🌸 Spring arrives — wildflowers bloom.', '☀️ Summer — peak visitor season.', '🍂 Autumn colors spread across the forests.', '❄️ Winter settles over the park.'][s];
     ui.toast(msg, '', 3000);
+    audio.sfx('season');
   });
   g.on('change', () => { hudDirty = true; });
   g.on('month', () => tutorial?.update());
@@ -302,13 +299,14 @@ function startGame(id, save, opts = {}) {
   setSpeed(1);
   controls.autoRotate = false;
   frameCamera(false);
-  if (prefs.sound !== false) { const on = audio.toggle(true); ui.setSound(on); }
+  audio.unlock();
+  ui.setSound(audio.on);
   hudDirty = true;
   if (opts.tutorial) {
     writeSave();
     tutorial = new Tutorial(game, ui, {
       setBeacon,
-      chime: () => audio.chime(),
+      chime: () => audio.sfx('chime', 0.6),
       end: () => {
         tutorial = null;
         prefs.tutorialDone = true;
@@ -626,8 +624,9 @@ function click(hit) {
     if (coarse) { marker.visible = false; ui.tileInfo(null); }
   }
   if (res.ok) {
-    audio.pluck(tool === 'remove' ? 330 : 560);
     const info = toolInfo(tool);
+    const sp = tool.startsWith('wl:') ? tool.slice(3) : '';
+    audio.sfx(tool === 'remove' ? 'remove' : info.group === 'landmark' ? 'landmark' : sp === 'whale' ? 'whale' : sp === 'condor' ? 'bird' : sp ? 'herd' : tool === 'pond' ? 'remove' : 'build');
     if (info.group === 'landmark') ui.toast(`${info.icon} <b>${info.name}</b> protected. <i>${info.fact}</i>`, 'good', 6500);
     if (info.group === 'wildlife') ui.toast(`${info.icon} A herd of ${info.name.toLowerCase()} has been reintroduced.`, 'good');
     if (info.group === 'facility') {
@@ -636,7 +635,7 @@ function click(hit) {
     }
     writeSaveSoon();
   } else {
-    audio.pluck(180, 0.06);
+    audio.sfx('error');
     ui.toast(`✗ ${res.reason}`, 'warn', 2200);
   }
   hoverDirty = true;
@@ -660,7 +659,7 @@ function paintAtPointer() {
     if (res.ok) { game.apply(tool, x, z); placed++; }
     else if (res.reason?.startsWith('Need') && !paintFailShown) { ui.toast(`✗ ${res.reason}`, 'warn', 2000); paintFailShown = true; }
   }
-  if (placed) audio.pluck(700 + Math.random() * 120, 0.05);
+  if (placed) audio.sfx('paint', 0.8);
   lastPaint = { x: hit.x, z: hit.z };
   hoverDirty = true;
 }
@@ -760,6 +759,7 @@ function loop() {
   if (hoverDirty) { hoverDirty = false; updateHover(); }
   animateGhost(time);
   animateBeacon(time);
+  updateSoundscape();
   if (saveSoon > 0) { saveSoon -= dt; if (saveSoon <= 0) writeSave(); }
   if (mode === 'play') {
     autosaveTimer += dt;
@@ -820,7 +820,59 @@ setGraphicsPref(graphicsPref);
 document.getElementById('graphicsBtn').onclick = () => graphicsModal();
 document.getElementById('tutorialBtn').onclick = () => startTutorial();
 audio.night = env.key === 'night';
+if (prefs.audio) audio.setSettings(prefs.audio);
 ui.setSound(false);
+// Browsers only allow sound after a user gesture: start on the first tap or key press.
+const unlockAudio = () => {
+  audio.unlock();
+  ui.setSound(audio.on);
+  removeEventListener('pointerdown', unlockAudio);
+  removeEventListener('keydown', unlockAudio);
+};
+addEventListener('pointerdown', unlockAudio);
+addEventListener('keydown', unlockAudio);
+document.addEventListener('click', (e) => { if (e.target.closest('button')) audio.sfx('click', 0.7); });
+
+function soundModal() {
+  audio.unlock();
+  const S = audio.settings;
+  const row = (key, label) => ({ label: `${S[key] ? '✓' : '○'} ${label}`, primary: S[key], action: () => { audio.setSettings({ [key]: !S[key] }); saveAudio(); soundModal(); } });
+  const vol = Math.round(S.volume * 100);
+  ui.modal(`<div style="font-size:44px">🎵</div><h2>Sound</h2>
+    <p>Everything you hear is synthesized live \u2014 a gentle, ever-changing soundtrack that turns dreamy at night.</p>
+    <p><input id="volSlider" type="range" min="0" max="100" value="${vol}" style="width:80%;accent-color:#f2b84b" aria-label="Volume"><br><small>Volume ${vol}%</small></p>`,
+  [row('music', 'Music'), row('sfx', 'Effects'), row('amb', 'Nature'), { label: 'Done' }]);
+  const slider = document.getElementById('volSlider');
+  slider.oninput = () => { audio.setSettings({ volume: slider.value / 100 }); slider.nextElementSibling.nextElementSibling.textContent = `Volume ${slider.value}%`; };
+  slider.onchange = saveAudio;
+}
+function saveAudio() {
+  prefs.audio = { ...audio.settings };
+  savePrefs();
+  ui.setSound(audio.on && audio.settings.volume > 0);
+}
+
+// Louder waterfalls and fire when the camera is close; geysers whoosh as they erupt.
+function updateSoundscape() {
+  if (!game || !audio.ctx) return;
+  let falls = 0, fire = 0;
+  for (const e of game.entities.values()) {
+    if (e.kind === 'waterfall') {
+      const d = camera.position.distanceTo(e.mesh.position);
+      falls = Math.max(falls, THREE.MathUtils.clamp(1 - (d - 15) / 70, 0, 1));
+    } else if (e.kind === 'geyser' && e.mesh.userData.erupted) {
+      e.mesh.userData.erupted = false;
+      const d = camera.position.distanceTo(e.mesh.position);
+      if (mode === 'play' && d < 140) audio.sfx('geyser', THREE.MathUtils.clamp(1.2 - d / 120, 0.15, 1));
+    }
+  }
+  for (const f of game.fires) {
+    const [x, z] = f.tiles[0] || [0, 0];
+    const d = Math.hypot(camera.position.x - game.terrain.cx(x), camera.position.z - game.terrain.cz(z));
+    fire = Math.max(fire, THREE.MathUtils.clamp(1 - d / 150, 0.2, 1));
+  }
+  audio.setProximity({ waterfall: falls, fire });
+}
 showMenu();
 requestAnimationFrame(loop);
 
@@ -854,4 +906,4 @@ installBtn.onclick = async () => {
 };
 
 // Debug/automation hook
-window.__park = { postfx, visitors, get game() { return game; }, startGame, selectTool, setSpeed, camera, controls, env, fmtMoney };
+window.__park = { postfx, visitors, audio, get game() { return game; }, startGame, selectTool, setSpeed, camera, controls, env, fmtMoney };
