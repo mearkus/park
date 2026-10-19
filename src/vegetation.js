@@ -190,7 +190,7 @@ export class Vegetation {
             const px = cx + (r1 - 0.5) * T * 0.75;
             const pz = cz + (r2 - 0.5) * T * 0.75;
             const py = t.heightAt(px, pz) - 0.1;
-            const h = def.h[0] + (def.h[1] - def.h[0]) * r3;
+            const h = (def.h[0] + (def.h[1] - def.h[0]) * r3) * 0.8;
             const w = def.w * (0.85 + r1 * 0.3) * (h / 3.4);
             q.setFromEuler(e.set(0, r2 * 6.28, 0));
             p.set(px, py, pz);

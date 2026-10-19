@@ -307,3 +307,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   #goals { max-height: calc(100% - 120px); }
   #toolcard { display: none; }
 }
+@media (max-width: 760px) {
+  #menu { align-items: stretch; }
+  .menu-inner { display: flex; flex-direction: column; min-height: 100%; }
+  .brand { margin: 4vh 0 auto; }
+  .scenarios { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; margin: 0 -16px; padding: 4px 16px 8px; scrollbar-width: none; }
+  .scenarios::-webkit-scrollbar { display: none; }
+  .scn { flex: 0 0 76%; min-height: 0; scroll-snap-align: center; }
+  .scn h3 { font-size: 18px; }
+  .scn p { font-size: 12px; }
+  .menu-actions .btn { flex: 1; padding: 13px 10px; }
+}

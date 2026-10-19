@@ -16,7 +16,7 @@ const tmpC = new THREE.Color();
 const tmpC2 = new THREE.Color();
 
 const OVERLAY = {
-  [TILE.TRAIL]: [new THREE.Color('#c2a272'), 0.85],
+  [TILE.TRAIL]: [new THREE.Color('#9c7350'), 0.9],
   [TILE.ROAD]: [new THREE.Color('#57524d'), 0.92],
   [TILE.BUILT]: [new THREE.Color('#a59d8b'), 0.75],
   [TILE.BURNED]: [new THREE.Color('#2f2622'), 0.8],

@@ -221,12 +221,14 @@ function startGame(id, save) {
 function frameCamera(menu) {
   const e = game.entrance;
   if (menu) {
+    const k = innerWidth < innerHeight ? 1.6 : 1;
     controls.target.set(0, -6, 0);
-    camera.position.set(-70, 105, 185);
+    camera.position.set(-70 * k, 105 * k, 185 * k);
   } else {
     const tx = game.terrain.cx(e.x), tz = game.terrain.cz(e.z);
+    const k = innerWidth < innerHeight ? 1.7 : 1;
     controls.target.set(tx * 0.5, 6, tz * 0.45);
-    camera.position.set(tx * 0.5 + 10, 78, tz * 0.45 + 92);
+    camera.position.set(tx * 0.5 + 10 * k, 78 * k, tz * 0.45 + 92 * k);
   }
   controls.update();
 }
