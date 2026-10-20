@@ -218,6 +218,12 @@ function hookGame(g) {
   });
   g.on('honor', (id) => { audio.sfx('fanfare'); ui.honor(id); });
   g.on('donation', () => audio.sfx('coin'));
+  g.on('unlock', (ids) => {
+    if (mode !== 'play') return;
+    const tier = g.tiers.find((tr) => ids.some((t) => tr.tools.includes(t)));
+    ui.unlocked(ids, tier && typeof tier.id !== 'number' ? tier.label : '');
+    audio.sfx('chime', 0.7);
+  });
   g.on('year', (year, visitors) => ui.toast(`🗓️ Year ${year - 1} complete — ${fmtVisitors(visitors)} visitors explored ${escapeHTML(g.name)}.`, '', 5000));
   g.on('season', (s) => {
     const msg = ['🌸 Spring arrives — wildflowers bloom.', '☀️ Summer — peak visitor season.', '🍂 Autumn colors spread across the forests.', '❄️ Winter settles over the park.'][s];
@@ -294,7 +300,7 @@ function startGame(id, save, opts = {}) {
   mode = 'play';
   ui.showMenu(false);
   ui.showHUD(true);
-  ui.buildTools(game.scn);
+  ui.buildTools(game.scn, game);
   selectTool('explore');
   setSpeed(1);
   controls.autoRotate = false;
@@ -746,7 +752,8 @@ addEventListener('keydown', (e) => {
   else if (k === 'p') ui.h.photo(true);
   else if (k === 'm') ui.h.toggleSound();
   else if (k >= '1' && k <= '9') {
-    const all = ui.cats.flatMap((c) => c.tools);
+    const open = game.unlocked();
+    const all = ui.cats.flatMap((c) => c.tools).filter((t) => open.has(t));
     const id = all[+k - 1];
     if (id) selectTool(id);
   }

@@ -78,13 +78,6 @@ const STEPS = [
     beacon: (g) => { const l = [...g.entities.values()].find((e) => e.landmark); return l ? { x: l.x, z: l.z } : null; },
   },
   {
-    title: 'Bring back wildlife',
-    text: 'In <b>Nature</b>, reintroduce <b>Bison</b> on open grassland away from roads. Healthy herds raise <b>Ecology</b> and <b>Uniqueness</b>.',
-    cat: 'nature', tool: 'wl:bison',
-    done: (g) => g.herds.length >= 1,
-    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'wl:bison', e.x - 9, e.z - 6, 16); },
-  },
-  {
     title: 'Let visitors stay',
     text: 'Back in <b>Build</b>, add a <b>Campground</b> beside a road. It adds visitor capacity and a little income.',
     cat: 'facilities', tool: 'campground',
@@ -106,8 +99,15 @@ const STEPS = [
     done: (g) => g.level >= 1,
   },
   {
+    title: 'Bring back wildlife',
+    text: 'State Park status unlocked new tools! In <b>Nature</b>, reintroduce <b>Bison</b> on open grassland away from roads. Healthy herds raise <b>Ecology</b> and <b>Uniqueness</b>.',
+    cat: 'nature', tool: 'wl:bison',
+    done: (g) => g.herds.length >= 1,
+    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'wl:bison', e.x - 9, e.z - 6, 16); },
+  },
+  {
     title: 'You’re a natural! 🎉',
-    text: 'Next comes <b>National Monument</b> (two wonders reachable by trail), then <b>National Park</b>. Add overlooks high up, plant meadows, keep buildings away from wonders, and balance all four scores. Good luck, Ranger!',
+    text: 'Each new status unlocks better tools \u2014 watch for the \uD83D\uDD13 previews in the goals panel. Next comes <b>National Monument</b> (two wonders reachable by trail), then <b>National Park</b>. Add overlooks high up, plant meadows, keep buildings away from wonders, and balance all four scores. Good luck, Ranger!',
     finish: true,
   },
 ];

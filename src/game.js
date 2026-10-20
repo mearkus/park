@@ -35,6 +35,16 @@ export const FACILITIES = {
     desc: 'Boosts beauty based on the view: place high up, near landmarks and water. Reach it by trail.',
     fact: 'Many park overlooks and stone walls were built by the Civilian Conservation Corps in the 1930s.',
   },
+  tower: {
+    name: 'Observation Tower', icon: '🗼', cost: 90, upkeep: 1, size: 1, needsRoad: false, lights: 0.5,
+    desc: 'A tall stone watchtower: a super-overlook with sweeping views. Place it high, near wonders and water.',
+    fact: 'The Desert View Watchtower at the Grand Canyon, designed by architect Mary Colter, was completed in 1932.',
+  },
+  museum: {
+    name: 'Nature Museum', icon: '📚', cost: 220, upkeep: 3, size: 2, needsRoad: true, capacity: 60000, revenue: 5, lights: 1,
+    desc: 'A grand museum of the park\u2019s geology, wildlife and people. Big boost to Enjoyment and Uniqueness.',
+    fact: 'The National Park Service\u2019s Junior Ranger program lets kids earn badges at hundreds of parks.',
+  },
   ranger: {
     name: 'Ranger Lookout', icon: '🛖', cost: 45, upkeep: 1.5, size: 1, needsRoad: false, lights: 0.5,
     desc: 'Rangers protect wildlife, reduce visitor impact and spot wildfires early.',
@@ -85,8 +95,20 @@ export function toolCategories(scn) {
     { id: 'paths', name: 'Paths', icon: '🥾', tools: ['trail', 'road'] },
     { id: 'nature', name: 'Nature', icon: '🌲', tools: ['forest', 'meadow', 'pond', ...scn.wildlife.map((w) => 'wl:' + w)] },
     { id: 'wonders', name: 'Wonders', icon: '✦', tools: scn.landmarks.map((l) => 'lm:' + l) },
-    { id: 'facilities', name: 'Build', icon: '🏛️', tools: ['visitor', 'campground', 'lodge', 'overlook', 'ranger'] },
+    { id: 'facilities', name: 'Build', icon: '🏛️', tools: ['visitor', 'campground', 'overlook', 'ranger', 'lodge', 'tower', 'museum'] },
     { id: 'remove', name: 'Restore', icon: '♻️', tools: ['remove'] },
+  ];
+}
+
+// Progression: what each stage of the park unlocks.
+export function unlockTiers(scn) {
+  const lm = scn.landmarks, wl = scn.wildlife.map((w) => 'wl:' + w);
+  return [
+    { id: 'start', label: 'Wild Land', tools: ['explore', 'trail', 'road', 'forest', 'visitor', 'remove', 'lm:' + lm[0]] },
+    { id: 'vc', label: 'Visitor Center opened', tools: ['campground', 'meadow'] },
+    { id: 1, label: 'State Park', tools: ['overlook', 'ranger', wl[0], lm[1] && 'lm:' + lm[1]].filter(Boolean) },
+    { id: 2, label: 'National Monument', tools: ['lodge', 'pond', 'tower', wl[1], lm[2] && 'lm:' + lm[2]].filter(Boolean) },
+    { id: 3, label: 'National Park', tools: ['museum'] },
   ];
 }
 
@@ -128,6 +150,8 @@ export class Game {
     this.visitorsYear = save?.visitorsYear ?? 0;
     this.lastYearVisitors = save?.lastYearVisitors ?? 0;
     this.notified = new Set(save?.notified ?? []);
+    this.seen = new Set(save?.seen ?? ['explore', 'trail', 'road', 'forest', 'visitor', 'remove']);
+    this.tiers = unlockTiers(this.scn);
 
     if (save?.ents) {
       for (const e of save.ents) this.addEntity(e.kind, e.x, e.z, e.rot || 0, true);
@@ -139,6 +163,8 @@ export class Game {
     this.roads.entrance = this.entrance;
     this.applySeasonVisuals(true);
     this.recompute();
+    this.checkUnlocks();
+    this.initialUnlockCheck = true;
   }
 
   on(evt, fn) { (this.listeners[evt] ||= []).push(fn); }
@@ -180,6 +206,10 @@ export class Game {
     const occupied = t.occ[idx] >= 0;
     const fail = (reason) => ({ ok: false, reason, cost });
     if (tool === 'explore') return { ok: true, cost: 0 };
+    if (!this.isUnlocked(tool)) {
+      const tier = this.tiers.find((tr) => tr.tools.includes(tool));
+      return fail(`Locked \u2014 unlocks at ${tier ? tier.label : 'a later stage'}`);
+    }
     if (tool === 'remove') {
       if (occupied) {
         const e = this.entities.get(t.occ[idx]);
@@ -330,11 +360,41 @@ export class Game {
     }
     this.recompute();
     this.milestoneGrants();
+    this.checkUnlocks();
     this.emit('placed', tool, x, z);
     return check;
   }
 
   // Waterfalls follow the terrain, so rebuild them after the ground changes.
+  tierReached(tier) {
+    if (tier.id === 'start') return true;
+    if (tier.id === 'vc') return this.hasVC || this.level >= 1;
+    return this.level >= tier.id;
+  }
+
+  unlocked() {
+    const set = new Set();
+    for (const tier of this.tiers) if (this.tierReached(tier)) tier.tools.forEach((t) => set.add(t));
+    return set;
+  }
+
+  isUnlocked(tool) {
+    return this.unlocked().has(tool);
+  }
+
+  // The next stage still to reach and what it unlocks.
+  nextTier() {
+    return this.tiers.find((t) => !this.tierReached(t)) || null;
+  }
+
+  // Announce newly unlocked tools once.
+  checkUnlocks() {
+    const fresh = [...this.unlocked()].filter((t) => !this.notified.has('u:' + t));
+    if (!fresh.length) return;
+    fresh.forEach((t) => this.notified.add('u:' + t));
+    if (this.initialUnlockCheck) this.emit('unlock', fresh);
+  }
+
   // One-time donations that help a young park get going.
   milestoneGrants() {
     const grant = (id, amount, msg) => {
@@ -572,6 +632,8 @@ export class Game {
     const lodges = conn('lodge');
     const camps = conn('campground');
     const overlooks = conn('overlook');
+    const towers = conn('tower');
+    const museums = conn('museum');
     const rangers = fac.filter((e) => e.kind === 'ranger');
     const forestFrac = forest / land, meadowFrac = meadow / land, waterFrac = water / (N * N);
     const natFrac = (natural + forest + meadow + burned * 0.5) / land;
@@ -581,7 +643,7 @@ export class Game {
     beauty += Math.min(14, forestFrac * 32) + Math.min(9, meadowFrac * 45) + Math.min(6, waterFrac * 30);
     const lmB = landmarks.map((e) => e.def.beauty).sort((a, b) => b - a);
     beauty += Math.min(32, lmB.reduce((s, b, i) => s + b * Math.pow(0.82, i), 0));
-    const views = overlooks.map((o) => {
+    const views = [...overlooks, ...towers].map((o) => {
       let v = 2;
       for (const l of landmarks) {
         const d = Math.hypot(l.x - o.x, l.z - o.z);
@@ -591,13 +653,13 @@ export class Game {
       for (let dz = -8; dz <= 8; dz++) for (let dx = -8; dx <= 8; dx++) if (t.inBounds(o.x + dx, o.z + dz) && t.isWater(o.x + dx, o.z + dz)) w++;
       v += Math.min(3, w * 0.04);
       v += clamp((t.tileH(o.x, o.z) - meanH) / 4, 0, 3);
-      return Math.min(10, v);
+      return o.kind === 'tower' ? Math.min(15, v * 1.5 + 2) : Math.min(10, v);
     }).sort((a, b) => b - a);
     this.bestView = views[0] || 0;
-    beauty += Math.min(16, views.reduce((s, v, i) => s + v * Math.pow(0.7, i), 0));
+    beauty += Math.min(towers.length ? 20 : 16, views.reduce((s, v, i) => s + v * Math.pow(0.7, i), 0));
     let penalty = road * 0.12 + built * 0.55;
     for (const f of fac) {
-      if (f.kind === 'overlook' || f.kind === 'ranger') continue;
+      if (f.kind === 'overlook' || f.kind === 'ranger' || f.kind === 'tower') continue;
       for (const l of landmarks) if (Math.max(Math.abs(f.x - l.x), Math.abs(f.z - l.z)) <= 2 + l.size) penalty += 2.5;
     }
     beauty -= penalty;
@@ -612,6 +674,7 @@ export class Game {
     const habitats = (forest > 0) + (meadow > 20) + (water > 30) + (rocky > 20) + (burned > 0);
     unique += habitats * 1.5;
     if (this.scn.landmarks.every((k) => kinds[k])) unique += 8;
+    if (museums.length) unique += 6;
 
     // --- Visitors & enjoyment
     let enjoy = 0;
@@ -620,12 +683,13 @@ export class Game {
     const reachableLandmarks = landmarks.filter((l) => l.connected);
     enjoy += Math.min(24, reachableLandmarks.length * 6) + Math.min(12, overlooks.length * 4);
     enjoy += Math.min(14, trail * 0.22);
+    enjoy += Math.min(12, towers.length * 6) + (museums.length ? 14 : 0);
     enjoy = clamp(enjoy, 0, 100);
 
     const appeal = clamp(beauty, 0, 100) * 0.55 + clamp(unique, 0, 100) * 0.45;
     const mult = [1, 1.4, 2.0, 2.8][this.level];
     let demand = appeal * appeal * 42 * mult * (0.35 + 0.65 * enjoy / 100);
-    let capacity = visitorCenters.length ? 45000 + camps.length * 60000 + lodges.length * 120000 : 8000;
+    let capacity = visitorCenters.length ? 45000 + camps.length * 60000 + lodges.length * 120000 + museums.length * 60000 : 8000;
     if (!visitorCenters.length) demand *= 0.3;
     const visitors = Math.round(Math.min(demand, capacity));
 
@@ -721,7 +785,7 @@ export class Game {
     ];
     if (level === 2) return [
       R('Protected wonders reachable by trail', this.connectedLandmarks, 2, 'count'),
-      R('Uniqueness', s.unique, 45),
+      R('Uniqueness', s.unique, 40),
       R('Beauty', s.beauty, 50),
       R('Ecology', s.eco, 50),
     ];
@@ -758,6 +822,7 @@ export class Game {
     this.history.push({ month: this.month, level: this.level });
     this.recompute();
     this.emit('designated', this.level);
+    this.checkUnlocks();
     return true;
   }
 
@@ -914,7 +979,7 @@ export class Game {
     return {
       v: 1, scn: this.scn.id, seed: this.seed, name: this.name,
       funds: Math.round(this.funds * 10) / 10, month: this.month, level: this.level,
-      honors: [...this.honors], history: this.history, notified: [...this.notified],
+      honors: [...this.honors], history: this.history, notified: [...this.notified], seen: [...this.seen],
       visitorsYear: Math.round(this.visitorsYear), lastYearVisitors: this.lastYearVisitors,
       h: Array.from(t.h, (v) => Math.round(v * 100) / 100), type, burn,
       ents: [...this.entities.values()].map((e) => ({ kind: e.kind, x: e.x, z: e.z })),

@@ -237,6 +237,48 @@ const BUILDERS = {
     return g;
   },
 
+  tower(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    add(g, new THREE.CylinderGeometry(0.85, 1.15, 1.6, 10), m.stoneDark, 0, -0.3, 0);
+    add(g, new THREE.CylinderGeometry(0.62, 0.85, 4.2, 10), m.stone, 0, 2.6, 0);
+    add(g, new THREE.CylinderGeometry(0.95, 0.75, 0.25, 12), m.stoneDark, 0, 4.8, 0);
+    add(g, new THREE.CylinderGeometry(0.82, 0.82, 0.9, 12, 1, true), m.window, 0, 5.4, 0, { shadow: false });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      add(g, box(0.12, 0.95, 0.12), m.logs, Math.cos(a) * 0.82, 5.4, Math.sin(a) * 0.82);
+    }
+    add(g, new THREE.ConeGeometry(1.15, 1.1, 12), m.roofRed, 0, 6.4, 0);
+    add(g, new THREE.CylinderGeometry(0.03, 0.03, 0.8, 4), m.metal, 0, 7.3, 0);
+    // a winding stair of stone slabs
+    for (let i = 0; i < 7; i++) {
+      const a = i * 0.9;
+      add(g, box(0.5, 0.08, 0.3), m.stoneDark, Math.cos(a) * 0.95, 0.7 + i * 0.55, Math.sin(a) * 0.95, { ry: -a, shadow: false });
+    }
+    return g;
+  },
+
+  museum(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    add(g, box(4.6, 1.4, 3.4), m.stone, 0, -0.35, 0);
+    add(g, box(4.2, 1.6, 2.8), m.cream, 0, 1.15, 0);
+    add(g, box(4.5, 0.25, 3.1), m.stoneDark, 0, 2.05, 0);
+    // copper-green dome over the great hall
+    add(g, new THREE.SphereGeometry(1.15, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), materials().roof, 0, 2.15, 0);
+    add(g, new THREE.CylinderGeometry(0.06, 0.06, 0.7, 5), m.metal, 0, 3.6, 0);
+    // columned portico
+    for (let i = -2; i <= 2; i++) add(g, new THREE.CylinderGeometry(0.13, 0.15, 1.6, 8), m.cream, i * 0.62, 1.15, 1.55);
+    add(g, gableGeo(3.4, 0.7, 0.7), m.stoneDark, 0, 1.95, 1.55, { ry: 0 });
+    add(g, box(3.2, 0.12, 0.9), m.stoneDark, 0, 0.36, 1.85);
+    add(g, box(3.6, 0.12, 1.1), m.stoneDark, 0, 0.24, 1.95);
+    for (const x of [-1.6, 1.6]) for (const y of [0.9, 1.5]) add(g, box(0.5, 0.36, 0.05), m.window, x, y, 1.41, { shadow: false });
+    for (const x of [-1.3, 0, 1.3]) add(g, box(0.5, 0.5, 0.05), m.window, x, 1.2, -1.41, { shadow: false });
+    // banners
+    for (const x of [-0.95, 0.95]) add(g, box(0.25, 0.7, 0.03), m.flag, x, 1.25, 1.75, { shadow: false });
+    return g;
+  },
+
   entrance(ctx) {
     const m = materials();
     const g = new THREE.Group();
@@ -539,7 +581,7 @@ export function buildModel(kind, ctx) {
   const fp = footprint(ctx.terrain, ctx.x, ctx.z, ctx.size || 1);
   ctx.fp = fp;
   const g = BUILDERS[kind](ctx);
-  const baseY = g.userData.baseOverride ?? (kind === 'hotspring' ? fp.avg : ['visitor', 'lodge', 'campground', 'overlook', 'ranger', 'entrance'].includes(kind) ? fp.avg + 0.05 : fp.avg);
+  const baseY = g.userData.baseOverride ?? (kind === 'hotspring' ? fp.avg : ['visitor', 'lodge', 'campground', 'overlook', 'ranger', 'entrance', 'tower', 'museum'].includes(kind) ? fp.avg + 0.05 : fp.avg);
   g.position.set(fp.cx, baseY, fp.cz);
   if (ctx.rot) g.rotation.y = ctx.rot;
   g.name = kind;

@@ -1,6 +1,8 @@
 // DOM user interface: menu, HUD, toolbar, goals, toasts and modals.
 import { LEVELS, HONORS, MONTHS, SEASONS, toolCategories, toolInfo, fmtMoney, fmtVisitors, seasonOf } from './game.js';
 
+const toolIcons = (ids) => ids.map((t) => toolInfo(t).icon).join(' ');
+
 const $ = (s) => document.querySelector(s);
 
 const BADGE_PALETTES = [
@@ -126,8 +128,9 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- toolbar
-  buildTools(scn) {
+  buildTools(scn, game) {
     this.scn = scn;
+    this.game = game;
     this.cats = toolCategories(scn);
     const cats = $('#cats');
     cats.innerHTML = '';
@@ -150,20 +153,53 @@ export class UI {
     const tools = $('#tools');
     tools.innerHTML = '';
     const cat = this.cats.find((c) => c.id === id);
+    const g = this.game;
+    const open = g ? g.unlocked() : null;
+    const locked = [];
     for (const t of cat.tools) {
+      if (open && !open.has(t)) { locked.push(t); continue; }
       const info = toolInfo(t);
       const b = document.createElement('button');
+      const isNew = g && !g.seen.has(t);
       b.className = 'tool' + (t === this.tool ? ' on' : '');
       b.dataset.tool = t;
-      b.innerHTML = `<span class="e">${info.icon}</span><span class="n">${info.name}</span>${info.cost ? `<span class="c">$${info.cost}K${info.paint ? '/tile' : ''}</span>` : ''}`;
+      b.innerHTML = `${isNew ? '<span class="new">NEW</span>' : ''}<span class="e">${info.icon}</span><span class="n">${info.name}</span>${info.cost ? `<span class="c">$${info.cost}K${info.paint ? '/tile' : ''}</span>` : ''}`;
       // tapping the active tool again puts it down (back to Explore)
       b.onclick = () => this.h.selectTool(t === this.tool && t !== 'explore' ? 'explore' : t);
       tools.appendChild(b);
     }
+    if (locked.length) {
+      const tier = g.tiers.find((tr) => locked.some((t) => tr.tools.includes(t)) && !g.tierReached(tr));
+      const b = document.createElement('button');
+      b.className = 'tool locked';
+      b.innerHTML = `<span class="e">🔒</span><span class="n">${locked.length} more</span><span class="c">at ${tier ? tier.label : 'later'}</span>`;
+      b.onclick = () => this.toast(`🔒 Coming at <b>${tier ? tier.label : 'a later stage'}</b>: ${locked.map((t) => `${toolInfo(t).icon} ${toolInfo(t).name}`).join(', ')}`, '', 4500);
+      tools.appendChild(b);
+    }
+    this.markNewTabs();
+  }
+
+  // Dot on tabs that contain tools the player hasn't tried yet.
+  markNewTabs() {
+    const g = this.game;
+    if (!g) return;
+    const open = g.unlocked();
+    $('#cats').querySelectorAll('button').forEach((b) => {
+      const cat = this.cats.find((c) => c.id === b.dataset.cat);
+      b.classList.toggle('has-new', cat.tools.some((t) => open.has(t) && !g.seen.has(t)));
+    });
+  }
+
+  refreshTools() {
+    if (this.cats) this.showCat(this.cat);
   }
 
   selectTool(id) {
     this.tool = id;
+    if (this.game && !this.game.seen.has(id)) {
+      this.game.seen.add(id);
+      setTimeout(() => this.refreshTools(), 0);
+    }
     const cat = this.cats.find((c) => c.tools.includes(id));
     // stay on the current tab when a tool is put down
     if (cat && cat.id !== this.cat && id !== 'explore') this.showCat(cat.id);
@@ -216,12 +252,14 @@ export class UI {
       ladder.innerHTML = LEVELS.map((L, i) => `<li class="${i <= g.level ? 'done' : i === g.level + 1 ? 'next' : ''}"><div class="b">${badgeSVG(i)}</div>${L.short}</li>`).join('');
       this._ladderLevel = g.level;
     }
+    const nextTier = g.nextTier();
+    const preview = nextTier ? `<div class="unlock-preview">🔓 <b>${nextTier.label}</b> unlocks: ${nextTier.tools.map((t) => `<span title="${toolInfo(t).name}">${toolInfo(t).icon}</span>`).join(' ')}</div>` : '';
     const reqEl = $('#reqs');
     if (g.level >= 3) {
-      reqEl.innerHTML = '<div class="won">🏞️ National Park achieved! Keep improving to earn honors.</div>';
+      reqEl.innerHTML = '<div class="won">🏞️ National Park achieved! Keep improving to earn honors.</div>' + preview;
       $('#petition').classList.add('hidden');
     } else {
-      reqEl.innerHTML = `<div style="font-size:12px;color:var(--ink-dim);margin-bottom:4px">Next: <b style="color:var(--ink)">${LEVELS[g.level + 1].name}</b></div>` + reqs.map((r) => this.reqRow(r)).join('');
+      reqEl.innerHTML = `<div style="font-size:12px;color:var(--ink-dim);margin-bottom:4px">Next: <b style="color:var(--ink)">${LEVELS[g.level + 1].name}</b></div>` + reqs.map((r) => this.reqRow(r)).join('') + preview;
       const pet = $('#petition');
       pet.classList.remove('hidden');
       const ok = g.eligible();
@@ -324,9 +362,15 @@ export class UI {
       <p>${L.blurb}</p>
       ${level === 3 ? '<p class="quote">“The national parks are the best idea we ever had.” — Wallace Stegner</p>' : ''}
       <div class="kpis"><div><b>${s.beauty}</b>Beauty</div><div><b>${s.unique}</b>Unique</div><div><b>${s.eco}</b>Ecology</div><div><b>${fmtVisitors(g.visitors)}</b>Visitors</div></div>
-      <p style="font-size:13px">Grant awarded: <b style="color:var(--gold)">${fmtMoney(L.bonus)}</b> · Annual funding increased.</p>`,
+      <p style="font-size:13px">Grant awarded: <b style="color:var(--gold)">${fmtMoney(L.bonus)}</b> · Annual funding increased.</p>
+      ${(() => { const tier = g.tiers.find((tr) => tr.id === level); return tier ? `<div class="unlocks"><div class="eyebrow">Unlocked</div>${tier.tools.map((t) => `<div class="u"><span>${toolInfo(t).icon}</span>${toolInfo(t).name}</div>`).join('')}</div>` : ''; })()}`,
     [{ label: 'Keep building', primary: true }, { label: '🎥 Take a victory tour', action: onTour }]);
     this.confetti(level === 3 ? 140 : 70);
+  }
+
+  unlocked(ids, reason) {
+    this.toast(`🔓 <b>Unlocked${reason ? ' \u2014 ' + reason : ''}:</b> ${ids.map((t) => `${toolInfo(t).icon} ${toolInfo(t).name}`).join(', ')}`, 'good', 6000);
+    this.refreshTools();
   }
 
   honor(id) {
