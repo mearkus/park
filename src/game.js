@@ -35,6 +35,11 @@ export const FACILITIES = {
     desc: 'Boosts beauty based on the view: place high up, near landmarks and water. Reach it by trail.',
     fact: 'Many park overlooks and stone walls were built by the Civilian Conservation Corps in the 1930s.',
   },
+  dock: {
+    name: 'Boat Dock', icon: '🛶', cost: 35, upkeep: 0.5, size: 1, needsRoad: false, capacity: 15000, revenue: 2, lights: 0,
+    desc: 'A wooden pier where visitors rent canoes and kayaks. Place on the shore; reach it by trail or road.',
+    fact: 'Voyageurs National Park is nearly 40% water \u2014 most of it is explored by canoe, kayak or boat.',
+  },
   tower: {
     name: 'Observation Tower', icon: '🗼', cost: 90, upkeep: 1, size: 1, needsRoad: false, lights: 0.5,
     desc: 'A tall stone watchtower: a super-overlook with sweeping views. Place it high, near wonders and water.',
@@ -95,7 +100,7 @@ export function toolCategories(scn) {
     { id: 'paths', name: 'Paths', icon: '🥾', tools: ['trail', 'road'] },
     { id: 'nature', name: 'Nature', icon: '🌲', tools: ['forest', 'meadow', 'pond', ...scn.wildlife.map((w) => 'wl:' + w)] },
     { id: 'wonders', name: 'Wonders', icon: '✦', tools: scn.landmarks.map((l) => 'lm:' + l) },
-    { id: 'facilities', name: 'Build', icon: '🏛️', tools: ['visitor', 'campground', 'overlook', 'ranger', 'lodge', 'tower', 'museum'] },
+    { id: 'facilities', name: 'Build', icon: '🏛️', tools: ['visitor', 'campground', 'overlook', 'dock', 'ranger', 'lodge', 'tower', 'museum'] },
     { id: 'remove', name: 'Restore', icon: '♻️', tools: ['remove'] },
   ];
 }
@@ -105,9 +110,9 @@ export function unlockTiers(scn) {
   const lm = scn.landmarks, wl = scn.wildlife.map((w) => 'wl:' + w);
   return [
     { id: 'start', label: 'Wild Land', tools: ['explore', 'trail', 'road', 'forest', 'visitor', 'remove', 'lm:' + lm[0]] },
-    { id: 'vc', label: 'Visitor Center opened', tools: ['campground', 'meadow'] },
-    { id: 1, label: 'State Park', tools: ['overlook', 'ranger', wl[0], lm[1] && 'lm:' + lm[1]].filter(Boolean) },
-    { id: 2, label: 'National Monument', tools: ['lodge', 'pond', 'tower', wl[1], lm[2] && 'lm:' + lm[2]].filter(Boolean) },
+    { id: 'vc', label: 'Visitor Center opened', tools: ['campground', 'meadow', 'overlook'] },
+    { id: 1, label: 'State Park', tools: ['dock', 'pond', 'ranger', wl[0], lm[1] && 'lm:' + lm[1]].filter(Boolean) },
+    { id: 2, label: 'National Monument', tools: ['lodge', 'tower', wl[1], lm[2] && 'lm:' + lm[2]].filter(Boolean) },
     { id: 3, label: 'National Park', tools: ['museum', wl[2], lm[3] && 'lm:' + lm[3]].filter(Boolean) },
     { id: 'honor', label: 'your first Honor', tools: [wl[3], lm[4] && 'lm:' + lm[4]].filter(Boolean) },
   ].filter((t) => t.tools.length);
@@ -288,7 +293,15 @@ export class Game {
     const maxSlope = Math.max(...tiles.map(([a, b]) => t.slope(a, b)));
     if (info.group === 'facility') {
       if (!allLand) return fail('Needs dry land');
-      if (maxSlope > 0.95) return fail('Too steep to build');
+      if (tool === 'dock') {
+        if (t.tileH(x, z) - t.wl > 1.8) return fail('Must be right at the water\u2019s edge');
+        if (!this.waterSide(x, z)) return fail('Needs open water next to it');
+        if (maxSlope > 1.3) return fail('Too steep for a dock');
+        return { ok: true, cost };
+      }
+      // overlooks and towers can perch on cliff edges, where the views are best
+      const steepest = tool === 'overlook' ? 2.4 : tool === 'tower' ? 1.4 : 0.95;
+      if (maxSlope > steepest) return fail(tool === 'overlook' ? 'Too sheer, even for an overlook' : 'Too steep to build');
       return { ok: true, cost };
     }
     // landmarks
@@ -461,9 +474,26 @@ export class Game {
     return ent;
   }
 
+  // Direction from a shore tile toward open water (for docks), or null.
+  waterSide(x, z) {
+    const t = this.terrain;
+    let best = null;
+    for (const [dx, dz] of DIRS4) {
+      const nx = x + dx, nz = z + dz;
+      if (!t.inBounds(nx, nz) || !t.isWater(nx, nz) || t.depth(nx, nz) < 0.4) continue;
+      const d = t.depth(nx, nz) + (t.inBounds(nx + dx, nz + dz) && t.isWater(nx + dx, nz + dz) ? 1 : 0);
+      if (!best || d > best.d) best = { dx, dz, d };
+    }
+    return best;
+  }
+
   facingRotation(kind, x, z, size) {
     if (!FACILITIES[kind] && kind !== 'entrance') return 0;
     if (kind === 'entrance') return 0;
+    if (kind === 'dock') {
+      const w = this.waterSide(x, z);
+      return w ? Math.atan2(w.dx, w.dz) : 0;
+    }
     // face the nearest path tile
     const t = this.terrain;
     let best = 0, bestD = Infinity;
@@ -648,6 +678,7 @@ export class Game {
     const overlooks = conn('overlook');
     const towers = conn('tower');
     const museums = conn('museum');
+    const docks = conn('dock');
     const rangers = fac.filter((e) => e.kind === 'ranger');
     const forestFrac = forest / land, meadowFrac = meadow / land, waterFrac = water / (N * N);
     const natFrac = (natural + forest + meadow + burned * 0.5) / land;
@@ -673,7 +704,7 @@ export class Game {
     beauty += Math.min(towers.length ? 20 : 16, views.reduce((s, v, i) => s + v * Math.pow(0.7, i), 0));
     let penalty = road * 0.12 + built * 0.55;
     for (const f of fac) {
-      if (f.kind === 'overlook' || f.kind === 'ranger' || f.kind === 'tower') continue;
+      if (f.kind === 'overlook' || f.kind === 'ranger' || f.kind === 'tower' || f.kind === 'dock') continue;
       for (const l of landmarks) if (Math.max(Math.abs(f.x - l.x), Math.abs(f.z - l.z)) <= 2 + l.size) penalty += 2.5;
     }
     beauty -= penalty;
@@ -697,13 +728,13 @@ export class Game {
     const reachableLandmarks = landmarks.filter((l) => l.connected);
     enjoy += Math.min(24, reachableLandmarks.length * 6) + Math.min(12, overlooks.length * 4);
     enjoy += Math.min(14, trail * 0.22);
-    enjoy += Math.min(12, towers.length * 6) + (museums.length ? 14 : 0);
+    enjoy += Math.min(12, towers.length * 6) + (museums.length ? 14 : 0) + Math.min(16, docks.length * 8);
     enjoy = clamp(enjoy, 0, 100);
 
     const appeal = clamp(beauty, 0, 100) * 0.55 + clamp(unique, 0, 100) * 0.45;
     const mult = [1, 1.4, 2.0, 2.8][this.level];
     let demand = appeal * appeal * 42 * mult * (0.35 + 0.65 * enjoy / 100);
-    let capacity = visitorCenters.length ? 45000 + camps.length * 60000 + lodges.length * 120000 + museums.length * 60000 : 8000;
+    let capacity = visitorCenters.length ? 45000 + camps.length * 60000 + lodges.length * 120000 + museums.length * 60000 + docks.length * 15000 : 8000;
     if (!visitorCenters.length) demand *= 0.3;
     const visitors = Math.round(Math.min(demand, capacity));
 
@@ -734,6 +765,7 @@ export class Game {
     this.demand = Math.round(demand);
     this.pressure = pressure;
     this.landmarkCount = landmarks.length;
+    this.docks = docks;
     this.connectedLandmarks = reachableLandmarks.length;
     this.hasVC = visitorCenters.length > 0;
     this.lights = fac.reduce((s, f) => s + (f.def.lights || 0), 0);

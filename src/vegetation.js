@@ -131,14 +131,20 @@ export class Vegetation {
     this.rocks.count = 0;
     this.group.add(this.rocks);
 
-    // boardwalks & bridges
-    this.decks = new THREE.InstancedMesh(new THREE.BoxGeometry(T * 1.0, 0.18, T * 0.55),
-      new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.8, map: textures().planks }), N * N);
-    this.decks.castShadow = true;
-    this.decks.receiveShadow = true;
-    this.decks.count = 0;
-    this.decks.setColorAt(0, dummyColor);
-    this.group.add(this.decks);
+    // boardwalks & bridges: decks, railings, posts and piers (instance-coloured wood or concrete/steel)
+    const inst = (geo, mat, n) => {
+      const mesh = new THREE.InstancedMesh(geo, mat, n);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.count = 0;
+      mesh.setColorAt(0, dummyColor);
+      this.group.add(mesh);
+      return mesh;
+    };
+    this.decks = inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.8, map: textures().planks }), N * N);
+    this.rails = inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.6, metalness: 0.2 }), N * N * 2);
+    this.posts = inst(new THREE.BoxGeometry(1, 1, 1).translate(0, -0.5, 0), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.7 }), N * N * 6);
+    this.piers = inst(new THREE.CylinderGeometry(1, 1.15, 1, 8).translate(0, -0.5, 0), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9, map: textures().stone }), N * N * 4);
   }
 
   rebuild() {
@@ -153,7 +159,7 @@ export class Vegetation {
     const season = t.season;
     const counts = {};
     for (const k in this.kinds) counts[k] = 0;
-    let nf = 0, ng = 0, nr = 0, ns = 0, nd = 0;
+    let nf = 0, ng = 0, nr = 0, ns = 0, nd = 0, nr2 = 0, np = 0, npi = 0;
     const keys = this.scn.trees;
     const flowerPal = this.flowerPalette();
     const grassCol = [new THREE.Color('#7fb04e'), new THREE.Color('#6a9a43'), new THREE.Color('#c0a456'), new THREE.Color('#9a926e')][season];
@@ -167,15 +173,54 @@ export class Vegetation {
         const cx = t.cx(x), cz = t.cz(z);
         if (water && (type === TILE.TRAIL || type === TILE.ROAD)) {
           const road = type === TILE.ROAD;
-          const nx = (x > 0 && (t.type[i - 1] === type)) || (x < N - 1 && t.type[i + 1] === type);
-          e.set(0, nx ? 0 : Math.PI / 2, 0);
-          q.setFromEuler(e);
-          p.set(cx, t.wl + (road ? 0.65 : 0.28), cz);
-          s.set(1, road ? 1.6 : 1, road ? 1.5 : 1);
-          m.compose(p, q, s);
+          const same = (dx, dz) => t.inBounds(x + dx, z + dz) && (t.type[t.idx(x + dx, z + dz)] === type || (!road && t.type[t.idx(x + dx, z + dz)] === TILE.ROAD));
+          const alongX = same(1, 0) || same(-1, 0) || !(same(0, 1) || same(0, -1));
+          const W = road ? 2.0 : 1.05;
+          const top = t.wl + (road ? 0.755 : 0.38);
+          const thick = road ? 0.35 : 0.16;
+          const ry = alongX ? 0 : Math.PI / 2;
+          q.setFromEuler(e.set(0, ry, 0));
+          // deck spans the whole tile so neighbouring sections join up
+          m.compose(p.set(cx, top - thick / 2, cz), q, s.set(T, thick, W));
           this.decks.setMatrixAt(nd, m);
-          this.decks.setColorAt(nd, col.set(road ? '#8c8781' : '#9a6d45'));
+          this.decks.setColorAt(nd, col.set(road ? '#b3ada3' : '#a0734a'));
           nd++;
+          const ground = t.tileMin(x, z) - 0.3;
+          // perpendicular unit vector (in world space) for rail placement
+          const px = alongX ? 0 : 1, pz = alongX ? 1 : 0;
+          for (const side of [-1, 1]) {
+            const sideOpen = alongX ? same(0, side) : same(side, 0);
+            if (sideOpen) continue; // junction: leave this side open
+            const ox = px * side * (W / 2 - 0.05), oz = pz * side * (W / 2 - 0.05);
+            m.compose(p.set(cx + ox, top + (road ? 0.5 : 0.55), cz + oz), q, s.set(T, road ? 0.12 : 0.07, road ? 0.1 : 0.07));
+            this.rails.setMatrixAt(nr2, m);
+            this.rails.setColorAt(nr2, col.set(road ? '#8a9399' : '#6e4a2c'));
+            nr2++;
+            for (const k of [-0.25, 0.25]) {
+              const ax = alongX ? k * T : 0, az = alongX ? 0 : k * T;
+              m.compose(p.set(cx + ox + ax, top + (road ? 0.55 : 0.6), cz + oz + az), q.identity(), s.set(road ? 0.1 : 0.07, road ? 0.55 : 0.6, road ? 0.1 : 0.07));
+              this.posts.setMatrixAt(np, m);
+              this.posts.setColorAt(np, col.set(road ? '#8a9399' : '#6e4a2c'));
+              np++;
+            }
+            q.setFromEuler(e.set(0, ry, 0));
+          }
+          // supports down to the bed of the lake or river
+          const below = top - thick;
+          if (road) {
+            m.compose(p.set(cx, below, cz), q.identity(), s.set(0.32, below - ground, 0.32));
+            this.piers.setMatrixAt(npi, m);
+            this.piers.setColorAt(npi, col.set('#b8b2a6'));
+            npi++;
+          } else {
+            for (const [a, b] of [[-0.4, -1], [0.4, 1]]) {
+              const ax = alongX ? a * T : b * (W / 2 - 0.08), az = alongX ? b * (W / 2 - 0.08) : a * T;
+              m.compose(p.set(cx + ax, below, cz + az), q.identity(), s.set(0.06, below - ground, 0.06));
+              this.piers.setMatrixAt(npi, m);
+              this.piers.setColorAt(npi, col.set('#6e4a2c'));
+              npi++;
+            }
+          }
           continue;
         }
         if (water) continue;
@@ -282,6 +327,9 @@ export class Vegetation {
     fin(this.rocks, nr);
     fin(this.snags, ns);
     fin(this.decks, nd);
+    fin(this.rails, nr2);
+    fin(this.posts, np);
+    fin(this.piers, npi);
   }
 
   flowerPalette() {

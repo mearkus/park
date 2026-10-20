@@ -12,6 +12,7 @@ import { PostFX } from './postfx.js';
 import { Ambience } from './ambience.js';
 import { Visitors } from './visitors.js';
 import { Tutorial } from './tutorial.js';
+import { Boats } from './boats.js';
 
 const SAVE_KEY = 'wild-horizons-save-v1';
 const PREF_KEY = 'wild-horizons-prefs-v1';
@@ -63,6 +64,7 @@ const postfx = new PostFX(renderer, scene, camera);
 env.toneComp.uComp.value = 1;
 const ambience = new Ambience(scene, particles);
 const visitors = new Visitors(scene);
+const boats = new Boats(scene);
 // (graphics are applied once onResize exists — see boot)
 
 let prefs = {};
@@ -84,6 +86,7 @@ function applyGraphics(level) {
   }
   env.toneComp.uComp.value = G.post ? 1 : 0;
   visitors.limit = G.crowd;
+  boats.limit = G.crowd;
   onResize();
 }
 function setGraphicsPref(p) {
@@ -198,6 +201,7 @@ function loadWorld(id, save = null) {
   hideGhost();
   pendingTap = null;
   visitors.reset();
+  boats.reset();
   if (game) game.dispose();
   game = new Game(world, id, save);
   hookGame(game);
@@ -821,6 +825,7 @@ function frame() {
   }
   if (game) {
     visitors.update(dt, time, game);
+    boats.update(dt, time, game);
     ambience.update(dt, time, {
       target: controls.target, season: game.terrain.season, night: env.nightness > 0,
       snowy: game.scn.winterSnow > 0.3, active: true, rate: GRAPHICS[graphics].fx,
