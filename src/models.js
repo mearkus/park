@@ -205,7 +205,9 @@ const BUILDERS = {
   overlook(ctx) {
     const m = materials();
     const g = new THREE.Group();
-    add(g, new THREE.CylinderGeometry(1.05, 1.15, 1.4, 10), m.stone, 0, -0.35, 0);
+    // stone foundation reaches down the slope so it can perch on cliff edges
+    const depth = ctx.fp.avg - ctx.fp.min + 0.8;
+    add(g, new THREE.CylinderGeometry(1.05, 1.2, depth + 0.4, 10), m.stone, 0, 0.2 - (depth + 0.4) / 2, 0);
     const post = new THREE.CylinderGeometry(0.04, 0.04, 0.5, 4);
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
@@ -234,6 +236,41 @@ const BUILDERS = {
     }
     add(g, new THREE.ConeGeometry(1.05, 0.7, 4), m.roof, 0, 4.5, 0, { ry: Math.PI / 4 });
     add(g, box(0.08, 3.4, 0.5), m.logs, 0.75, 1.9, 0, { rz: 0.5 });
+    return g;
+  },
+
+  dock(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    const t = ctx.terrain;
+    const deckY = t.wl + 0.35 - (ctx.fp.avg + 0.05);
+    const len = 4.2;
+    // planked pier reaching out over the water (+z faces the water)
+    add(g, box(1.1, 0.12, len), m.wood, 0, deckY, len / 2 - 0.4);
+    add(g, box(2.6, 0.12, 0.9), m.wood, 0, deckY, len - 0.4);
+    for (const z of [0.4, 1.6, 2.8, 3.8]) for (const x of [-0.5, 0.5]) {
+      add(g, new THREE.CylinderGeometry(0.07, 0.07, 3.2, 5), m.logs, x, deckY - 1.5, z);
+    }
+    for (const x of [-1.25, 1.25]) add(g, new THREE.CylinderGeometry(0.07, 0.07, 3.4, 5), m.logs, x, deckY - 1.4, len - 0.4);
+    // moored canoes that bob on the water
+    const boats = [];
+    [['#c0392b', -0.95, 2.1], ['#2e7d5b', 0.95, 2.6]].forEach(([c, x, z]) => {
+      const b = canoe(c);
+      b.position.set(x, deckY - 0.3, z);
+      b.rotation.y = Math.PI / 2;
+      g.add(b);
+      boats.push(b);
+    });
+    // kayak rack on shore
+    add(g, box(1.2, 0.08, 0.08), m.logs, 0.2, 0.6, -0.6);
+    add(g, box(1.2, 0.08, 0.08), m.logs, 0.2, 0.3, -0.6);
+    for (const [c, y] of [['#f0a830', 0.68], ['#3d7fb5', 0.38]]) {
+      const k = add(g, new THREE.CapsuleGeometry(0.1, 0.9, 3, 6), new THREE.MeshStandardMaterial({ color: c, flatShading: true }), 0.2, y, -0.6, { rz: Math.PI / 2 });
+      k.castShadow = true;
+    }
+    g.userData.update = (dt, time) => {
+      boats.forEach((b, i) => { b.position.y = deckY - 0.3 + Math.sin(time * 1.6 + i * 2) * 0.04; b.rotation.z = Math.sin(time * 1.2 + i) * 0.05; });
+    };
     return g;
   },
 
@@ -726,6 +763,21 @@ const BUILDERS = {
   },
 };
 
+// A simple canoe hull with a seat; used at docks and by paddling visitors.
+export function canoe(color) {
+  const g = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.6, side: THREE.DoubleSide }));
+  hull.scale.set(0.95, 0.28, 0.24);
+  hull.position.y = 0.26;
+  hull.castShadow = true;
+  g.add(hull);
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.42), materials().wood);
+  seat.position.y = 0.2;
+  g.add(seat);
+  return g;
+}
+
 // A still, reflective lake ringed with rocks (Mirror Lake, glacial tarns).
 function pond(ctx, color, rock) {
   const m = materials();
@@ -751,7 +803,7 @@ export function buildModel(kind, ctx) {
   const fp = footprint(ctx.terrain, ctx.x, ctx.z, ctx.size || 1);
   ctx.fp = fp;
   const g = BUILDERS[kind](ctx);
-  const baseY = g.userData.baseOverride ?? (kind === 'hotspring' || kind === 'mirrorlake' || kind === 'tarn' ? fp.avg : ['visitor', 'lodge', 'campground', 'overlook', 'ranger', 'entrance', 'tower', 'museum'].includes(kind) ? fp.avg + 0.05 : fp.avg);
+  const baseY = g.userData.baseOverride ?? (kind === 'hotspring' || kind === 'mirrorlake' || kind === 'tarn' ? fp.avg : ['visitor', 'lodge', 'campground', 'overlook', 'ranger', 'entrance', 'tower', 'museum', 'dock'].includes(kind) ? fp.avg + 0.05 : fp.avg);
   g.position.set(fp.cx, baseY, fp.cz);
   if (ctx.rot) g.rotation.y = ctx.rot;
   g.name = kind;
