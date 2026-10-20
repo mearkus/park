@@ -115,6 +115,24 @@ function whale(sp) {
   return g;
 }
 
+function otter(sp) {
+  const g = new THREE.Group();
+  const c = mat(sp.color);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.7, 4, 8), c);
+  body.rotation.z = Math.PI / 2;
+  g.add(body);
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), mat('#d9c7a8'));
+  face.position.set(0.5, 0.08, 0);
+  g.add(face);
+  for (const side of [-1, 1]) {
+    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.07, 5, 4), c);
+    paw.position.set(0.25, 0.18, side * 0.14);
+    g.add(paw);
+  }
+  g.userData.fluke = new THREE.Object3D();
+  return g;
+}
+
 export class Herd {
   constructor(id, species, x, z, pop, ctx) {
     this.id = id;
@@ -134,7 +152,7 @@ export class Herd {
 
   visibleCount() {
     if (this.sp.flying) return Math.min(4, Math.max(1, Math.round(this.pop / 3)));
-    if (this.sp.swimming) return Math.min(3, Math.max(1, Math.round(this.pop / 4)));
+    if (this.sp.swimming && !this.sp.small) return Math.min(3, Math.max(1, Math.round(this.pop / 4)));
     return Math.min(9, Math.max(1, Math.round(this.pop / 2)));
   }
 
@@ -150,7 +168,7 @@ export class Herd {
 
   spawn() {
     const sp = this.sp;
-    const mesh = sp.flying ? bird(sp) : sp.swimming ? whale(sp) : quadruped(sp);
+    const mesh = sp.flying ? bird(sp) : sp.swimming ? (sp.small ? otter(sp) : whale(sp)) : quadruped(sp);
     const { wx, wz } = this.center;
     const a = {
       mesh,
@@ -160,7 +178,7 @@ export class Herd {
       heading: Math.random() * Math.PI * 2,
       idle: Math.random() * 3,
       phase: Math.random() * 10,
-      speed: 0.9 + Math.random() * 0.6,
+      speed: (0.9 + Math.random() * 0.6) * (sp.slow ? 0.25 : 1),
     };
     this.pickTarget(a);
     this.group.add(mesh);
@@ -171,7 +189,7 @@ export class Herd {
     const t = this.ctx.terrain;
     const tile = t.tileAt(wx, wz);
     if (!tile) return false;
-    if (this.sp.swimming) return t.depth(tile.x, tile.z) > 1.6;
+    if (this.sp.swimming) return t.depth(tile.x, tile.z) > (this.sp.small ? 0.5 : 1.6);
     if (t.isWater(tile.x, tile.z)) return false;
     if (t.slope(tile.x, tile.z) > (this.sp.climber ? 3 : 1.3)) return false;
     if (t.occ[t.idx(tile.x, tile.z)] >= 0) return false;
@@ -198,7 +216,7 @@ export class Herd {
         const r = 10 + (a.speed - 1) * 12;
         const x = wx + Math.cos(a.phase) * r, z = wz + Math.sin(a.phase) * r;
         const ground = t.heightAt(x, z);
-        a.mesh.position.set(x, Math.max(ground, t.wl) + 16 + Math.sin(a.phase * 2) * 1.5, z);
+        a.mesh.position.set(x, Math.max(ground, t.wl) + (this.sp.low ? 6 : 16) + Math.sin(a.phase * 2) * 1.5, z);
         a.mesh.rotation.order = 'YXZ';
         a.mesh.rotation.set(-0.3, -a.phase - Math.PI / 2, 0);
         const flap = Math.sin(time * 6 + a.speed * 10);
@@ -212,10 +230,17 @@ export class Herd {
         if (d < 1) this.pickTarget(a);
         else {
           a.heading = Math.atan2(-dz, dx);
-          a.x += (dx / d) * dt * 1.6;
-          a.z += (dz / d) * dt * 1.6;
+          const v = this.sp.small ? 0.5 : 1.6;
+          a.x += (dx / d) * dt * v;
+          a.z += (dz / d) * dt * v;
         }
         a.phase += dt;
+        if (this.sp.small) {
+          // otters float on their backs, bobbing gently
+          a.mesh.position.set(a.x, t.wl + 0.05 + Math.sin(time * 2 + a.speed * 9) * 0.05, a.z);
+          a.mesh.rotation.set(Math.sin(time + a.speed) * 0.1, a.heading, 0.15);
+          continue;
+        }
         const cycle = (a.phase % 16) / 16;
         const surf = cycle < 0.3 ? Math.sin((cycle / 0.3) * Math.PI) : 0;
         a.mesh.position.set(a.x, t.wl - 1.2 + surf * 1.35, a.z);

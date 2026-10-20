@@ -108,8 +108,9 @@ export function unlockTiers(scn) {
     { id: 'vc', label: 'Visitor Center opened', tools: ['campground', 'meadow'] },
     { id: 1, label: 'State Park', tools: ['overlook', 'ranger', wl[0], lm[1] && 'lm:' + lm[1]].filter(Boolean) },
     { id: 2, label: 'National Monument', tools: ['lodge', 'pond', 'tower', wl[1], lm[2] && 'lm:' + lm[2]].filter(Boolean) },
-    { id: 3, label: 'National Park', tools: ['museum'] },
-  ];
+    { id: 3, label: 'National Park', tools: ['museum', wl[2], lm[3] && 'lm:' + lm[3]].filter(Boolean) },
+    { id: 'honor', label: 'your first Honor', tools: [wl[3], lm[4] && 'lm:' + lm[4]].filter(Boolean) },
+  ].filter((t) => t.tools.length);
 }
 
 const DIRS4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -264,7 +265,7 @@ export class Game {
       const same = this.herds.filter((h) => h.species === tool.slice(3)).length;
       if (same >= 3) return fail('Max 3 herds per species');
       if (sp.swimming) {
-        if (!water || t.depth(x, z) < 2) return fail('Needs deep water');
+        if (!water || t.depth(x, z) < (sp.small ? 0.6 : 2)) return fail(sp.small ? 'Needs coastal water' : 'Needs deep water');
       } else if (!sp.flying) {
         if (water) return fail('Needs land');
         if (slope > (sp.climber ? 3 : 1.3)) return fail('Too steep');
@@ -311,6 +312,10 @@ export class Game {
           if (!nearWater) return fail('Must touch the water');
           break;
         }
+        case 'highflat':
+          if (!allLand || maxSlope > 0.9) return fail('Needs a flat spot');
+          if (t.tileH(x, z) < t.wl + 4) return fail('Needs high ground in the mountains');
+          break;
         case 'high':
           if (!allLand) return fail('Needs dry ground');
           if (t.tileH(x, z) < this.scn.snowLine - 9) return fail('Needs high elevation near the snowline');
@@ -353,7 +358,7 @@ export class Game {
       this.refreshHerdsAndModels();
     } else if (tool.startsWith('wl:')) {
       const sp = SPECIES[tool.slice(3)];
-      this.addHerd(tool.slice(3), x, z, sp.flying ? 4 : sp.swimming ? 4 : 6);
+      this.addHerd(tool.slice(3), x, z, sp.flying ? 4 : sp.swimming && !sp.small ? 4 : 6);
     } else {
       const kind = tool.startsWith('lm:') ? tool.slice(3) : tool;
       this.addEntity(kind, x, z, 0, false);
@@ -369,6 +374,7 @@ export class Game {
   tierReached(tier) {
     if (tier.id === 'start') return true;
     if (tier.id === 'vc') return this.hasVC || this.level >= 1;
+    if (tier.id === 'honor') return this.honors.size > 0;
     return this.level >= tier.id;
   }
 
@@ -578,12 +584,20 @@ export class Game {
         if (!t.inBounds(x, z) || dx * dx + dz * dz > R * R) continue;
         const ty = t.type[t.idx(x, z)];
         const water = t.isWater(x, z);
-        if (sp.swimming) { if (water && t.depth(x, z) > 1.5) k += 0.5; continue; }
+        if (sp.swimming) {
+          if (sp.small) { if (water && t.depth(x, z) > 0.5 && t.depth(x, z) < 5) k += 0.7; else if (!water && t.tileH(x, z) - t.wl < 1.5) k += 0.3; continue; }
+          if (water && t.depth(x, z) > 1.5) k += 0.5;
+          continue;
+        }
         if (ty === TILE.ROAD) { k -= 1.2; continue; }
         if (ty === TILE.BUILT) { k -= 2; continue; }
         if (water) { k += 0.3; continue; }
         const s = t.slope(x, z);
+        if (herd.species === 'owl') { k += ty === TILE.FOREST ? 1.1 : ty === TILE.MEADOW ? 0.7 : 0.2; continue; }
         if (sp.flying) { k += s > 1 ? 0.9 : 0.25; continue; }
+        if (herd.species === 'tortoise') { k += ty === TILE.NATURAL ? (s < 0.6 ? 1.1 : 0.4) : ty === TILE.MEADOW ? 0.6 : 0.2; continue; }
+        if (herd.species === 'marmot') { k += ty === TILE.NATURAL && s > 0.5 ? 1.2 : ty === TILE.MEADOW ? 1.0 : 0.3; continue; }
+        if (herd.species === 'wolf' || herd.species === 'mountainlion') { k += ty === TILE.FOREST ? 0.9 : ty === TILE.MEADOW ? 0.8 : 0.5; continue; }
         if (sp.climber || herd.species === 'bighorn') { k += ty === TILE.NATURAL ? (s > 0.7 ? 1.2 : 0.5) : ty === TILE.MEADOW ? 0.9 : 0.3; continue; }
         if (herd.species === 'blackbear' || herd.species === 'grizzly') { k += ty === TILE.FOREST ? 1.1 : ty === TILE.MEADOW ? 0.8 : 0.4; continue; }
         k += ty === TILE.MEADOW ? 1.4 : ty === TILE.FOREST ? 0.7 : ty === TILE.BURNED ? 0.5 : 0.5;
@@ -833,6 +847,7 @@ export class Game {
         this.honors.add(id);
         this.funds += 40;
         this.emit('honor', id);
+        this.checkUnlocks();
       }
     }
   }

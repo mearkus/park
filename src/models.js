@@ -279,6 +279,156 @@ const BUILDERS = {
     return g;
   },
 
+  mudpot(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    add(g, new THREE.CylinderGeometry(1.15, 1.3, 0.8, 14), m.sinterDark, 0, -0.3, 0);
+    const mud = new THREE.MeshStandardMaterial({ color: '#8a7a68', roughness: 0.55, metalness: 0.05 });
+    add(g, new THREE.CircleGeometry(0.95, 20), mud, 0, 0.11, 0, { rx: -Math.PI / 2, shadow: false });
+    const bubbles = [];
+    for (let i = 0; i < 6; i++) {
+      const b = add(g, new THREE.SphereGeometry(0.16, 8, 6), mud, (Math.random() - 0.5) * 1.2, 0.1, (Math.random() - 0.5) * 1.2, { shadow: false });
+      b.userData.phase = Math.random() * 3;
+      bubbles.push(b);
+    }
+    const p = new THREE.Vector3();
+    g.userData.update = (dt, t, fx) => {
+      for (const b of bubbles) {
+        const k = ((t + b.userData.phase) % 2.2) / 2.2;
+        b.scale.setScalar(0.2 + k * 1.1);
+        b.position.y = 0.08 + k * 0.08;
+        if (k > 0.97 && fx && Math.random() < 0.3) {
+          p.copy(b.position); g.localToWorld(p);
+          fx.emit({ x: p.x, y: p.y + 0.1, z: p.z, vy: 1.6, spread: 1.4, life: 0.6, size: 0.12, color: [0.5, 0.44, 0.38], alpha: 0.9, gravity: 6, count: 4 });
+          fx.emit({ x: p.x, y: p.y + 0.2, z: p.z, vy: 0.8, spread: 0.3, life: 2.5, size: 0.5, grow: 0.8, color: [1, 1, 1], alpha: 0.3 });
+        }
+      }
+    };
+    return g;
+  },
+
+  terraces(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    const pool = new THREE.MeshStandardMaterial({ color: '#7fd0d8', roughness: 0.1, metalness: 0.1 });
+    const edge = materials().mat;
+    for (let i = 0; i < 4; i++) {
+      const r = 2.3 - i * 0.45, y = -0.4 + i * 0.55, ox = -0.3 * i, oz = -0.25 * i;
+      add(g, new THREE.CylinderGeometry(r, r + 0.15, 0.8, 16), i % 2 ? m.sinter : m.sinterDark, ox, y, oz);
+      add(g, new THREE.TorusGeometry(r - 0.05, 0.08, 4, 20), edge, ox, y + 0.4, oz, { rx: Math.PI / 2, shadow: false });
+      add(g, new THREE.CircleGeometry(r - 0.2, 20), pool, ox, y + 0.41, oz, { rx: -Math.PI / 2, shadow: false });
+    }
+    let steam = 0;
+    const p = new THREE.Vector3();
+    g.userData.update = (dt, t, fx) => {
+      steam -= dt;
+      if (steam < 0 && fx) {
+        steam = 0.2;
+        p.set((Math.random() - 0.7) * 1.8, 1.4, (Math.random() - 0.7) * 1.8);
+        g.localToWorld(p);
+        fx.emit({ x: p.x, y: p.y, z: p.z, vy: 0.9, spread: 0.4, life: 3, size: 0.8, grow: 1, color: [1, 1, 1], alpha: 0.3 });
+      }
+    };
+    return g;
+  },
+
+  elcap(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    const seed = ctx.x * 7 + ctx.z * 13;
+    add(g, jitterGeo(new THREE.BoxGeometry(4.4, 11, 3.4, 4, 8, 3), 0.35, seed), m.granite, 0, 4.5, 0);
+    add(g, jitterGeo(new THREE.BoxGeometry(4.6, 0.6, 3.6, 4, 1, 3), 0.25, seed + 1), m.mossGreen, 0, 10.2, 0);
+    for (let i = 0; i < 6; i++) add(g, new THREE.ConeGeometry(0.4, 1.4, 6), m.darkGreen, (i % 3 - 1) * 1.3, 11.1, (i < 3 ? -0.8 : 0.8));
+    // dark water streaks down the face
+    for (let i = 0; i < 4; i++) add(g, box(0.25, 6 + i, 0.05), m.graniteDark, -1.4 + i * 0.9, 5 + i * 0.4, 1.73, { shadow: false });
+    add(g, new THREE.CylinderGeometry(2.8, 3.1, 2.4, 10), m.graniteDark, 0, -0.6, 0);
+    return g;
+  },
+
+  mirrorlake(ctx) { return pond(ctx, '#3d79a8', 'granite'); },
+  tarn(ctx) { return pond(ctx, '#33bfc6', 'rock'); },
+
+  balancedrock(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    add(g, jitterGeo(new THREE.CylinderGeometry(0.55, 1.0, 4.4, 8, 3), 0.15, ctx.x), m.sandstone, 0, 1.9, 0);
+    add(g, jitterGeo(new THREE.CylinderGeometry(0.42, 0.5, 0.6, 8), 0.05, 2), m.sandstoneLight, 0, 4.35, 0);
+    add(g, jitterGeo(new THREE.DodecahedronGeometry(1.25, 1), 0.2, ctx.z), m.sandstoneDark, 0.15, 5.6, 0, { s: [1.15, 0.9, 1] });
+    add(g, new THREE.CylinderGeometry(1.2, 1.4, 0.6, 9), m.sandstoneLight, 0, -0.1, 0);
+    return g;
+  },
+
+  slotcanyon(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    const bands = [m.sandstone, m.sandstoneLight, m.sandstoneDark];
+    for (let i = 0; i < 9; i++) {
+      const z = -2.2 + i * 0.55;
+      const off = Math.sin(i * 0.9) * 0.45;
+      for (const side of [-1, 1]) {
+        const h = 4.2 + Math.sin(i * 1.7 + side) * 0.8;
+        add(g, jitterGeo(new THREE.BoxGeometry(1.4, h, 0.62, 2, 4, 1), 0.12, i * 3 + side), bands[(i + (side > 0 ? 1 : 0)) % 3], off + side * 1.0, h / 2 - 0.3, z, { ry: Math.sin(i) * 0.15 });
+      }
+    }
+    // a thin ribbon of river along the floor
+    add(g, new THREE.PlaneGeometry(0.7, 5), new THREE.MeshStandardMaterial({ color: '#5aa6b8', roughness: 0.15 }), 0, 0.06, 0, { rx: -Math.PI / 2, shadow: false });
+    return g;
+  },
+
+  lighthouse(ctx) {
+    const m = materials();
+    const root = new THREE.Group();
+    const g = new THREE.Group();
+    g.scale.setScalar(1.35);
+    root.add(g);
+    add(g, new THREE.CylinderGeometry(1.1, 1.2, 0.8, 10), m.basalt, 0, -0.2, 0);
+    const white = materials().cream;
+    add(g, new THREE.CylinderGeometry(0.42, 0.6, 3.6, 12), white, 0, 1.9, 0);
+    add(g, new THREE.CylinderGeometry(0.44, 0.47, 0.5, 12), m.roofRed, 0, 2.6, 0);
+    add(g, new THREE.CylinderGeometry(0.55, 0.55, 0.12, 12), m.metal, 0, 3.75, 0);
+    add(g, new THREE.CylinderGeometry(0.33, 0.33, 0.55, 12, 1, true), m.window, 0, 4.1, 0, { shadow: false });
+    add(g, new THREE.ConeGeometry(0.45, 0.5, 12), m.roofRed, 0, 4.6, 0);
+    add(g, box(1.2, 0.8, 0.9), white, 0.95, 0.4, 0.5);
+    add(g, gableGeo(1.3, 0.5, 1.0), m.roofRed, 0.95, 0.8, 0.5);
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(1.4, 9, 16, 1, true),
+      new THREE.MeshBasicMaterial({ color: '#fff2b0', transparent: true, opacity: 0.0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+    beam.geometry.translate(0, -4.5, 0);
+    beam.rotation.z = Math.PI / 2;
+    const pivot = new THREE.Group();
+    pivot.position.y = 4.1;
+    pivot.add(beam);
+    g.add(pivot);
+    g.userData.update = (dt, t) => {
+      pivot.rotation.y = t * 0.9;
+      beam.material.opacity = 0.22 * Math.min(1, materials().window.emissiveIntensity / 2);
+    };
+    root.userData.update = g.userData.update;
+    return root;
+  },
+
+  paradise(ctx) {
+    const g = new THREE.Group();
+    const t = ctx.terrain;
+    const rand = mulberry32(ctx.x * 17 + ctx.z * 5);
+    const cols = ['#e2603c', '#f2c94c', '#8f6ad8', '#f6f2e8', '#e86fa5', '#5a8de0'].map((c) => new THREE.Color(c));
+    const n = 140;
+    const flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.13, 0), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.6 }), n);
+    const stems = new THREE.InstancedMesh(new THREE.ConeGeometry(0.06, 0.5, 3).translate(0, 0.25, 0), new THREE.MeshStandardMaterial({ color: '#5f9a45', flatShading: true }), n);
+    const mtx = new THREE.Matrix4();
+    for (let i = 0; i < n; i++) {
+      const ox = (rand() - 0.5) * 4.6, oz = (rand() - 0.5) * 4.6;
+      const y = t.heightAt(ctx.fp.cx + ox, ctx.fp.cz + oz) - ctx.fp.avg;
+      mtx.makeTranslation(ox, y + 0.45, oz);
+      flowers.setMatrixAt(i, mtx);
+      flowers.setColorAt(i, cols[Math.floor(rand() * cols.length)]);
+      mtx.makeTranslation(ox, y, oz);
+      stems.setMatrixAt(i, mtx);
+    }
+    g.add(stems, flowers);
+    for (let i = 0; i < 3; i++) add(g, new THREE.DodecahedronGeometry(0.4 + rand() * 0.3, 0), materials().graniteDark, (rand() - 0.5) * 4, 0.1, (rand() - 0.5) * 4);
+    return g;
+  },
+
   entrance(ctx) {
     const m = materials();
     const g = new THREE.Group();
@@ -576,12 +726,32 @@ const BUILDERS = {
   },
 };
 
+// A still, reflective lake ringed with rocks (Mirror Lake, glacial tarns).
+function pond(ctx, color, rock) {
+  const m = materials();
+  const g = new THREE.Group();
+  const lift = ctx.fp.max - ctx.fp.avg + 0.06;
+  add(g, new THREE.CylinderGeometry(2.45, 2.6, lift + 1.2, 20), rock === 'granite' ? m.graniteDark : m.stoneDark, 0, (lift - 1.2) / 2, 0, { shadow: false });
+  const water = new THREE.MeshStandardMaterial({ color, roughness: 0.02, metalness: 0.6, envMapIntensity: 1.6 });
+  add(g, new THREE.CircleGeometry(2.15, 28), water, 0, lift + 0.01, 0, { rx: -Math.PI / 2, shadow: false });
+  const rand = mulberry32(ctx.x * 5 + ctx.z * 9);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 + rand() * 0.3;
+    add(g, new THREE.DodecahedronGeometry(0.3 + rand() * 0.3, 0), rock === 'granite' ? m.granite : m.stone, Math.cos(a) * 2.25, lift + 0.05, Math.sin(a) * 2.25);
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = rand() * Math.PI * 2;
+    add(g, new THREE.ConeGeometry(0.35, 1.5, 6), m.darkGreen, Math.cos(a) * 2.6, lift + 0.7, Math.sin(a) * 2.6);
+  }
+  return g;
+}
+
 // Wrapper that positions a model on the terrain.
 export function buildModel(kind, ctx) {
   const fp = footprint(ctx.terrain, ctx.x, ctx.z, ctx.size || 1);
   ctx.fp = fp;
   const g = BUILDERS[kind](ctx);
-  const baseY = g.userData.baseOverride ?? (kind === 'hotspring' ? fp.avg : ['visitor', 'lodge', 'campground', 'overlook', 'ranger', 'entrance', 'tower', 'museum'].includes(kind) ? fp.avg + 0.05 : fp.avg);
+  const baseY = g.userData.baseOverride ?? (kind === 'hotspring' || kind === 'mirrorlake' || kind === 'tarn' ? fp.avg : ['visitor', 'lodge', 'campground', 'overlook', 'ranger', 'entrance', 'tower', 'museum'].includes(kind) ? fp.avg + 0.05 : fp.avg);
   g.position.set(fp.cx, baseY, fp.cz);
   if (ctx.rot) g.rotation.y = ctx.rot;
   g.name = kind;
