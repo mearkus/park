@@ -429,6 +429,53 @@ export class Game {
     if (this.connectedLandmarks >= 2) grant('m-trail', 50, 'Hikers love your trails! The Friends of the Park donated');
   }
 
+  // ---- undo -----------------------------------------------------------------
+  snapshot() {
+    const t = this.terrain;
+    return {
+      h: t.h.slice(), type: t.type.slice(), burn: t.burn.slice(), funds: this.funds,
+      ents: [...this.entities.values()].map((e) => ({ kind: e.kind, x: e.x, z: e.z })),
+      herds: this.herds.map((h) => ({ species: h.species, x: h.x, z: h.z, pop: h.pop })),
+    };
+  }
+
+  // Call before a player action; pass the result to endAction once it's done.
+  beginAction(label) {
+    return { label, snap: this.snapshot() };
+  }
+
+  endAction(action, changed, label) {
+    if (!action || !changed) return;
+    action.spent = action.snap.funds - this.funds;
+    if (label) action.label = label;
+    (this.undoStack ||= []).push(action);
+    if (this.undoStack.length > 25) this.undoStack.shift();
+    this.emit('undo-change');
+  }
+
+  canUndo() { return !!this.undoStack?.length; }
+
+  undo() {
+    const action = this.undoStack?.pop();
+    if (!action) return null;
+    const s = action.snap, t = this.terrain;
+    const heightsChanged = s.h.some((v, i) => v !== t.h[i]);
+    for (const e of this.entities.values()) this.world.scene.remove(e.mesh);
+    this.entities.clear();
+    for (const h of this.herds) h.dispose();
+    this.herds = [];
+    t.h.set(s.h); t.type.set(s.type); t.burn.set(s.burn); t.occ.fill(-1);
+    for (const e of s.ents) this.addEntity(e.kind, e.x, e.z, 0, true);
+    for (const h of s.herds) this.addHerd(h.species, h.x, h.z, h.pop);
+    if (heightsChanged) t.updateHeights();
+    // refund exactly what the action cost (or return what removing it paid out)
+    this.funds += action.spent;
+    this.dirtyColors = this.dirtyVeg = true;
+    this.recompute();
+    this.emit('undo-change');
+    return action;
+  }
+
   // Revert tiles painted in an accidental stroke and refund them.
   undoPaint(list) {
     const t = this.terrain;
