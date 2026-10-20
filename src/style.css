@@ -371,3 +371,6 @@ body.tutorial #toasts { top: calc(250px + var(--safe-top)); }
 .unlocks .eyebrow { grid-column: 1 / -1; }
 .unlocks .u { background: rgba(246,195,91,.12); border: 1px solid rgba(246,195,91,.35); border-radius: 10px; padding: 6px; font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: center; }
 .unlocks .u span { font-size: 18px; }
+
+#btnUndo { font-size: 24px; font-weight: 700; color: var(--gold); }
+#btnUndo.disabled { opacity: 0.35; color: var(--ink); }

@@ -235,6 +235,7 @@ function hookGame(g) {
     audio.sfx('season');
   });
   g.on('change', () => { hudDirty = true; });
+  g.on('undo-change', syncUndo);
   g.on('month', () => tutorial?.update());
 }
 
@@ -254,6 +255,25 @@ function showMenu() {
   ui.setContinue(readSave());
   loadWorld(menuScenario);
   frameCamera(true);
+}
+
+// ---------------------------------------------------------------- undo
+function undo() {
+  if (!game || mode !== 'play') return;
+  if (painting) { finishStroke(); painting = false; stroke = null; }
+  const a = game.undo();
+  if (!a) { ui.toast('Nothing to undo', '', 1500); return; }
+  audio.sfx('remove');
+  hideGhost();
+  ghost.suppress = '';
+  hoverDirty = true;
+  const money = Math.round(a.spent);
+  ui.toast(`↶ Undid <b>${escapeHTML(a.label)}</b>${money > 0 ? ` \u2014 refunded $${money}K` : ''}`, '', 2500);
+  writeSaveSoon();
+}
+function syncUndo() {
+  const b = document.getElementById('btnUndo');
+  if (b) b.classList.toggle('disabled', !game?.canUndo());
 }
 
 // ---------------------------------------------------------------- tutorial
@@ -305,6 +325,7 @@ function startGame(id, save, opts = {}) {
   ui.showMenu(false);
   ui.showHUD(true);
   ui.buildTools(game.scn, game);
+  syncUndo();
   selectTool('explore');
   setSpeed(1);
   controls.autoRotate = false;
@@ -586,7 +607,14 @@ function beginStroke() {
   painting = true;
   lastPaint = null;
   paintFailShown = false;
-  stroke = { t: performance.now(), tiles: [] };
+  stroke = { t: performance.now(), tiles: [], action: game.beginAction(toolInfo(tool).name) };
+}
+
+// Record a finished stroke as one undoable action.
+function finishStroke() {
+  if (!stroke) return;
+  const n = stroke.tiles.length;
+  game.endAction(stroke.action, n > 0, `${toolInfo(tool).name}${n > 1 ? ` \u00d7${n}` : ''}`);
 }
 
 function cancelStroke(undo) {
@@ -661,6 +689,7 @@ function endPointer(e) {
   pendingPaint = null;
   const wasPainting = painting;
   painting = false;
+  if (wasPainting) finishStroke();
   stroke = null;
   if (wasPainting) { writeSaveSoon(); return; }
   if (!down || modalOpen) return;
@@ -688,7 +717,9 @@ function click(hit) {
     return;
   }
   pendingTap = null;
+  const action = game.beginAction(tool === 'remove' ? 'Restore' : toolInfo(tool).name);
   const res = game.apply(tool, hit.x, hit.z);
+  game.endAction(action, res.ok);
   if (res.ok) {
     hideGhost();
     ghost.suppress = `${tool}:${hit.x}:${hit.z}`;
@@ -750,6 +781,7 @@ addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === ' ') { setSpeed(speed ? 0 : 1); e.preventDefault(); }
   else if (k === 'escape') { if (modalOpen) ui.closeModal(); else selectTool('explore'); }
+  else if (k === 'z' && (e.ctrlKey || e.metaKey)) { undo(); e.preventDefault(); }
   else if (k === 'g') ui.toggleGoals();
   else if (k === 't') ui.h.cycleTime();
   else if (k === 'c') setTour(!tour);
@@ -907,6 +939,7 @@ function graphicsModal(after) {
 setGraphicsPref(graphicsPref);
 document.getElementById('graphicsBtn').onclick = () => graphicsModal();
 document.getElementById('tutorialBtn').onclick = () => startTutorial();
+document.getElementById('btnUndo').onclick = () => undo();
 audio.night = env.key === 'night';
 if (prefs.audio) audio.setSettings(prefs.audio);
 ui.setSound(false);
