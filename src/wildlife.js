@@ -115,7 +115,27 @@ function whale(sp) {
   return g;
 }
 
+function turtle(sp) {
+  const g = new THREE.Group();
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 6), mat(sp.color));
+  shell.scale.set(1.25, 0.35, 1);
+  g.add(shell);
+  const skin = mat('#8a8f6a');
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 5), skin);
+  head.position.set(0.55, 0.02, 0);
+  g.add(head);
+  for (const [x, z] of [[0.25, 0.4], [0.25, -0.4], [-0.3, 0.32], [-0.3, -0.32]]) {
+    const fl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.04, 0.12), skin);
+    fl.position.set(x, -0.02, z);
+    fl.rotation.y = z > 0 ? -0.5 : 0.5;
+    g.add(fl);
+  }
+  g.userData.fluke = new THREE.Object3D();
+  return g;
+}
+
 function otter(sp) {
+  if (sp.shell) return turtle(sp);
   const g = new THREE.Group();
   const c = mat(sp.color);
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.7, 4, 8), c);

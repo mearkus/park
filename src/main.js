@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Environment, TIMES, TIME_ORDER } from './environment.js';
 import { Particles } from './particles.js';
 import { Game, toolInfo, LEVELS, fmtMoney, fmtVisitors } from './game.js';
-import { SCENARIOS, SPECIES } from './scenarios.js';
+import { SCENARIOS, SPECIES, SCENARIO_BY_ID, TIER_INFO } from './scenarios.js';
 import { HALF, TILE, N } from './terrain.js';
 import { syncMaterials, buildModel } from './models.js';
 import { UI, escapeHTML } from './ui.js';
@@ -115,6 +115,29 @@ function writeSave() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.serialize())); } catch { /* storage full or blocked */ }
 }
 
+// ---------------------------------------------------------------- campaign progression
+// With campaign mode on, harder landscapes unlock after reaching National Park in an easier one.
+const campaignOn = () => prefs.campaign !== false;
+function tierUnlocked(tier) {
+  if (!campaignOn() || tier <= 1) return true;
+  const done = prefs.completed || {};
+  return SCENARIOS.some((sc) => sc.tier === tier - 1 && done[sc.id]);
+}
+function lockReason(sc) {
+  if (tierUnlocked(sc.tier)) return null;
+  return `Reach National Park in a ${TIER_INFO[sc.tier - 1].stars} ${TIER_INFO[sc.tier - 1].label} landscape to unlock`;
+}
+function recordCompletion(id) {
+  const before = [1, 2, 3].filter(tierUnlocked);
+  prefs.completed = { ...(prefs.completed || {}), [id]: true };
+  savePrefs();
+  const fresh = [1, 2, 3].filter((t) => tierUnlocked(t) && !before.includes(t));
+  return fresh;
+}
+function firstOpenScenario() {
+  return (SCENARIOS.find((sc) => sc.id === menuScenario && !lockReason(sc)) || SCENARIOS.find((sc) => !lockReason(sc))).id;
+}
+
 // ---------------------------------------------------------------- UI wiring
 const ui = new UI({
   selectScenario(id) {
@@ -124,6 +147,8 @@ const ui = new UI({
     loadWorld(id);
   },
   start() {
+    const reason = lockReason(SCENARIO_BY_ID[menuScenario]);
+    if (reason) { ui.toast(`🔒 ${reason}.`, 'warn', 3500); return; }
     if (prefs.tutorialDone) { startGame(menuScenario, null); return; }
     ui.modal(`<div style="font-size:52px">🎓</div><h2>New to Wild Horizons?</h2><p>A short guided tutorial shows you how to build your first park and earn State Park status.</p>`, [
       { label: 'Play the tutorial', primary: true, action: () => startTutorial() },
@@ -164,7 +189,7 @@ const ui = new UI({
   },
   selectTool,
   modalOpen(on) { modalOpen = on; },
-  graphics(after) { graphicsModal(after); },
+  graphics(after) { settingsModal(after); },
 });
 
 function setSpeed(s) {
@@ -219,6 +244,7 @@ function hookGame(g) {
   g.on('designated', (lvl) => {
     audio.sfx('fanfare');
     ui.ceremony(lvl, g, () => setTour(true));
+    if (lvl === 3) announceUnlocks(recordCompletion(g.scn.id));
   });
   g.on('honor', (id) => { audio.sfx('fanfare'); ui.honor(id); });
   g.on('donation', () => audio.sfx('coin'));
@@ -251,7 +277,8 @@ function showMenu() {
   marker.visible = false;
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.45;
-  ui.buildMenu(SCENARIOS, menuScenario);
+  menuScenario = firstOpenScenario();
+  ui.buildMenu(SCENARIOS, menuScenario, lockReason);
   ui.setContinue(readSave());
   loadWorld(menuScenario);
   frameCamera(true);
@@ -318,6 +345,7 @@ function startTutorial() {
 }
 
 function startGame(id, save, opts = {}) {
+  if (save?.level >= 3 && !prefs.completed?.[id]) recordCompletion(id);
   endTutorial();
   menuScenario = id;
   loadWorld(id, save);
@@ -921,9 +949,25 @@ function watchFrameRate(dt) {
   }
 }
 
+function announceUnlocks(tiers) {
+  if (!campaignOn()) return;
+  for (const t of tiers) {
+    const names = SCENARIOS.filter((sc) => sc.tier === t).map((sc) => sc.name).join(' & ');
+    ui.toast(`🏆 New ${TIER_INFO[t].stars} ${TIER_INFO[t].label} landscapes unlocked: <b>${names}</b>`, 'good', 8000);
+  }
+}
+
+function settingsModal(after) {
+  graphicsModal(after);
+}
+
 function graphicsModal(after) {
   const opts = ['auto', 'low', 'medium', 'high'];
-  ui.modal(`<div style="font-size:44px">⚙️</div><h2>Graphics</h2>
+  ui.modal(`<div style="font-size:44px">⚙️</div><h2>Settings</h2>
+    <h4 class="set-h">🏆 Campaign progression</h4>
+    <p style="font-size:13px">When on, ★★ and ★★★ landscapes unlock after you reach National Park in an easier one. Turn off to play any landscape.</p>
+    <div class="set-row"><button class="btn small ${campaignOn() ? 'primary' : 'ghost'}" id="campaignToggle">Campaign progression: ${campaignOn() ? 'On' : 'Off'}</button></div>
+    <h4 class="set-h">🖥️ Graphics</h4>
     <p>Lower settings run smoother and save battery on phones.</p>
     <p style="font-size:13px"><b>Auto</b> picks for your device and steps down if things get slow.<br>
     <b>Low</b>: no shadows or effects · <b>Medium</b>: shadows & miniature look · <b>High</b>: sharpest detail.</p>
@@ -933,11 +977,17 @@ function graphicsModal(after) {
     primary: o === graphicsPref,
     action: () => { setGraphicsPref(o); fpsSettle = 6; after?.(); },
   })), { label: 'Close', action: after }]);
+  document.getElementById('campaignToggle').onclick = () => {
+    prefs.campaign = !campaignOn();
+    savePrefs();
+    if (mode === 'menu') { menuScenario = firstOpenScenario(); ui.buildMenu(SCENARIOS, menuScenario, lockReason); }
+    graphicsModal(after);
+  };
 }
 
 // ---------------------------------------------------------------- boot
 setGraphicsPref(graphicsPref);
-document.getElementById('graphicsBtn').onclick = () => graphicsModal();
+document.getElementById('graphicsBtn').onclick = () => settingsModal();
 document.getElementById('tutorialBtn').onclick = () => startTutorial();
 document.getElementById('btnUndo').onclick = () => undo();
 audio.night = env.key === 'night';

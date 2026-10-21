@@ -16,6 +16,8 @@ const TREE_KINDS = {
   oak: { shape: 'round', trunk: '#5c4330', crown: ['#80b04e', '#5f8f3d', '#c96a2b', null], h: [2.6, 3.6], w: 1.2 },
   maple: { shape: 'round', trunk: '#5c4330', crown: ['#8fbf55', '#5b8f3e', '#d4492a', null], h: [2.8, 3.9], w: 1.15 },
   cottonwood: { shape: 'round', trunk: '#7a6550', crown: ['#9cc75a', '#78a648', '#e8b93a', null], h: [3.0, 4.2], w: 1.25 },
+  ohia: { shape: 'round', trunk: '#5a4433', crown: ['#5b8a3c', '#4f7f36', '#58863a', '#56803a'], h: [2.6, 3.8], w: 1.1 },
+  treefern: { shape: 'juniper', trunk: '#4a3a2c', crown: ['#79b54e', '#6aa84a', '#6aa84a', '#66a046'], h: [1.8, 2.8], w: 1.05 },
   juniper: { shape: 'juniper', trunk: '#6b5440', crown: ['#5f7a55', '#5a7350', '#5d7452', '#5c6f54'], h: [1.4, 2.2], w: 1 },
 };
 
@@ -339,6 +341,7 @@ export class Vegetation {
       redrock: ['#f2c94c', '#e2683c', '#c86fd6'],
       coastal: ['#e86fa5', '#ffffff', '#8f6ad8', '#f2d64b'],
       alpine: ['#7b6ff0', '#f7e05a', '#ef6b5e', '#ffffff'],
+      volcano: ['#d8343a', '#f2c94c', '#e8572e', '#ffffff'],
     }[this.scn.id] || ['#ffffff'];
     return by.map((h) => new THREE.Color(h));
   }

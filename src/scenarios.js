@@ -86,6 +86,36 @@ export const LANDMARKS = {
     fact: 'Glacier National Park had an estimated 150 glaciers in 1850; only a few dozen remain today.',
     rule: 'high',
   },
+  lavalake: {
+    name: 'Lava Lake', icon: '🌋', cost: 150, size: 2, beauty: 12, unique: 1,
+    desc: 'A churning lake of molten rock that glows brightest at night. Needs flat high ground.',
+    fact: 'Halema\u02bbuma\u02bbu crater at K\u012blauea has held a churning lava lake at times \u2014 one of only a handful on Earth.',
+    rule: 'crater',
+  },
+  cindercone: {
+    name: 'Cinder Cone', icon: '⛰', cost: 110, size: 2, beauty: 9, unique: 1,
+    desc: 'A steep cone of loose volcanic cinders with a crater on top.',
+    fact: 'Lassen Volcanic\u2019s Cinder Cone rises about 700 feet, built from loose cinders thrown out in eruptions.',
+    rule: 'land2',
+  },
+  lavatube: {
+    name: 'Lava Tube', icon: '🕳️', cost: 80, size: 1, beauty: 7, unique: 1,
+    desc: 'A fern-draped cave left behind by a river of lava.',
+    fact: 'N\u0101huku (Thurston Lava Tube) formed when a lava flow\u2019s crust cooled while molten rock kept draining from inside.',
+    rule: 'land',
+  },
+  fumarole: {
+    name: 'Fumaroles', icon: '♨️', cost: 60, size: 1, beauty: 6, unique: 1,
+    desc: 'Hissing steam vents crusted with yellow sulfur. Needs flat ground.',
+    fact: 'At Bumpass Hell in Lassen Volcanic, steam vents can top 300\u00b0F.',
+    rule: 'flat',
+  },
+  oceanentry: {
+    name: 'Ocean Entry', icon: '🔥', cost: 140, size: 1, beauty: 11, unique: 1,
+    desc: 'Lava pours into the sea in billowing steam, building brand-new land. Place at the shoreline.',
+    fact: 'When K\u012blauea\u2019s lava reaches the ocean it builds new land \u2014 the Island of Hawai\u02bbi is still growing.',
+    rule: 'shore',
+  },
   mudpot: {
     name: 'Mud Pots', icon: '🫧', cost: 70, size: 1, beauty: 6, unique: 1,
     desc: 'Bubbling, hissing pools of hot clay. Needs flat ground.',
@@ -159,6 +189,8 @@ export const SPECIES = {
   tortoise: { name: 'Desert Tortoise', icon: '🐢', cost: 50, color: '#6d5c3c', body: [0.62, 0.28, 0.48], hump: true, leg: 0.12, slow: true, fact: 'Desert tortoises can live 50\u201380 years and spend much of their lives in burrows.' },
   otter: { name: 'Sea Otter', icon: '🦦', cost: 70, color: '#5b4330', swimming: true, small: true, fact: 'Sea otters returned to the Olympic coast after 59 were relocated there from Alaska in 1969\u201370.' },
   marmot: { name: 'Hoary Marmot', icon: '🐿️', cost: 40, color: '#9a8466', body: [0.5, 0.3, 0.3], leg: 0.14, climber: true, fact: 'Hoary marmots whistle a sharp alarm call, earning the nickname \u201cwhistlers.\u201d' },
+  nene: { name: 'N\u0113n\u0113 (Hawaiian Goose)', icon: '🪿', cost: 60, color: '#6f6152', flying: true, low: true, fact: 'The n\u0113n\u0113, Hawai\u02bbi\u2019s state bird, recovered from only about 30 birds in the 1950s.' },
+  honu: { name: 'Green Sea Turtle', icon: '🐢', cost: 70, color: '#4f6b3a', swimming: true, small: true, shell: true, fact: 'Green sea turtles \u2014 honu \u2014 bask on Hawai\u02bbi\u2019s black-sand beaches.' },
   whale: { name: 'Gray Whale', icon: '🐋', cost: 100, color: '#5d6770', swimming: true, fact: 'Gray whales migrate past the Pacific coast each spring and fall — a round trip of up to 12,000 miles.' },
 };
 
@@ -451,13 +483,84 @@ export const SCENARIOS = [
       return ctx.rel > 0.8 && ctx.rel < 10 && ctx.s < 0.45 && ctx.n.fbm(ctx.u * 6 + 3, ctx.v * 6, 2) > 0.15 ? 0.6 : 0;
     },
   },
+  {
+    id: 'volcano',
+    name: 'Fire Mountain',
+    inspired: 'Hawai\u02bbi Volcanoes & Lassen',
+    tagline: 'A smoking shield volcano, glowing lava, black-sand beaches and rainforest.',
+    seed: 1916,
+    waterLevel: 3,
+    snowLine: 99,
+    winterSnow: 0,
+    baseElev: 0,
+    baseBeauty: 22,
+    baseUnique: 9,
+    landmarks: ['fumarole', 'lavatube', 'lavalake', 'cindercone', 'oceanentry'],
+    wildlife: ['nene', 'honu', 'deer', 'blackbear'],
+    trees: ['ohia', 'treefern'],
+    rock: '#3b3532',
+    accent: '#ff6a2c',
+    height(u, v, n) {
+      const coast = 0.16 + n.fbm(v * 3, 5.5, 3) * 0.06;
+      const land = smoothstep(coast - 0.03, coast + 0.12, u);
+      const d = dist(u, v, 0.6, 0.42);
+      let h = 5 + 40 * Math.exp(-(d * d) / 0.05) + n.fbm(u * 3, v * 3, 3) * 1.8;
+      // lava-flow ridges running down the flanks
+      const ang = Math.atan2(v - 0.42, u - 0.6);
+      h += Math.max(0, n.simplex(ang * 2.4, d * 6)) * 2.2 * smoothstep(0.05, 0.3, d);
+      // summit caldera with a flat floor
+      const rim = 0.085 + n.fbm(u * 8, v * 8, 2) * 0.01;
+      h = lerp(h, 33, smoothstep(rim + 0.015, rim - 0.01, d));
+      return lerp(-2 + n.fbm(u * 4, v * 4, 2), h, land);
+    },
+    palette: {
+      under: C('#24211f'), sand: C('#34302d'),
+      lava: C('#2a2624'), lavaB: C('#3a3330'), cinder: C('#6b3a2b'), sulfur: C('#b59a3e'),
+      green: [C('#5a9a42'), C('#4f8c3a'), C('#56913d'), C('#53873c')], moss: C('#3f6e33'),
+    },
+    groundColor(ctx, out) {
+      const P = this.palette, { rel, s, u, v, n, season } = ctx;
+      if (rel < 0) return out.copy(P.under);
+      if (rel < 1.0 && s < 0.7) return out.copy(P.sand);
+      const d = dist(u, v, 0.6, 0.42);
+      const flow = n.fbm(u * 5 + 20, v * 5, 3);
+      if (d < 0.12) return out.copy(P.lava).lerp(P.sulfur, smoothstep(0.2, 0.6, n.fbm(u * 14, v * 14, 2)) * 0.6);
+      if (s > 1.0) return out.copy(P.lavaB).lerp(P.cinder, n.simplex(u * 9, ctx.h * 0.3) * 0.5 + 0.5);
+      if (flow > 0.12 || rel > 25) return out.copy(P.lava).lerp(P.lavaB, n.simplex(u * 20, v * 20) * 0.5 + 0.5);
+      return out.copy(P.green[season]).lerp(P.moss, smoothstep(-0.3, 0.3, n.fbm(u * 6, v * 6, 2)) * 0.5);
+    },
+    forestChance(ctx) {
+      const { rel, s, u, v, n } = ctx;
+      if (rel < 1.4 || s > 1.0 || rel > 22) return 0;
+      if (n.fbm(u * 5 + 20, v * 5, 3) > 0.12) return 0; // fresh lava stays bare
+      return v < 0.6 ? 0.7 : 0.35; // wetter windward side
+    },
+    meadowChance(ctx) {
+      return ctx.rel > 1.2 && ctx.s < 0.4 && ctx.n.fbm(ctx.u * 5 + 20, ctx.v * 5, 3) < 0 && ctx.n.fbm(ctx.u * 7, ctx.v * 7 + 3, 2) > 0.3 ? 0.5 : 0;
+    },
+  },
 ];
+
+// Difficulty tiers: ★ gentle, ★★ moderate, ★★★ challenging.
+export const TIER_OF = { caldera: 1, coastal: 1, granite: 2, redrock: 2, alpine: 3, volcano: 3 };
+export const TIER_INFO = {
+  1: { label: 'Gentle', stars: '★', funds: 850, income: 1.0, goal: 1.0 },
+  2: { label: 'Moderate', stars: '★★', funds: 750, income: 0.9, goal: 1.06 },
+  3: { label: 'Challenging', stars: '★★★', funds: 650, income: 0.8, goal: 1.12 },
+};
+for (const sc of SCENARIOS) {
+  sc.tier = TIER_OF[sc.id];
+  sc.difficulty = TIER_INFO[sc.tier].label;
+}
+SCENARIOS.sort((a, b) => a.tier - b.tier);
 
 export const SCENARIO_BY_ID = Object.fromEntries(SCENARIOS.map((s) => [s.id, s]));
 
 // Strata colours for the diorama sides
 export function strataColor(scn, y, out) {
-  const bands = scn.id === 'redrock'
+  const bands = scn.id === 'volcano'
+    ? ['#2f2b29', '#3d3532', '#4a2f26', '#26221f']
+    : scn.id === 'redrock'
     ? ['#a94a28', '#c8693a', '#e0b88d', '#94462a']
     : scn.id === 'coastal'
       ? ['#4f4a44', '#5d564d', '#463f39', '#6a6157']

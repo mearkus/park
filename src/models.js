@@ -316,6 +316,115 @@ const BUILDERS = {
     return g;
   },
 
+  lavalake(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    const lift = ctx.fp.max - ctx.fp.avg + 0.1;
+    const rock = new THREE.MeshStandardMaterial({ color: '#2a2523', flatShading: true, roughness: 0.95 });
+    // low sloping rim that blends into the crater floor
+    add(g, jitterGeo(new THREE.CylinderGeometry(2.45, 3.3, lift + 1.4, 18, 2), 0.18, ctx.x), rock, 0, (lift - 1.4) / 2, 0);
+    add(g, jitterGeo(new THREE.TorusGeometry(2.2, 0.35, 5, 22), 0.15, ctx.z), rock, 0, lift + 0.12, 0, { rx: Math.PI / 2 });
+    const lava = add(g, new THREE.CircleGeometry(2.05, 40), lavaMaterial(ctx.uniforms), 0, lift + 0.02, 0, { rx: -Math.PI / 2, shadow: false });
+    lava.receiveShadow = false;
+    let t0 = 0;
+    const p = new THREE.Vector3();
+    g.userData.update = (dt, time, fx) => {
+      t0 -= dt;
+      if (t0 < 0 && fx) {
+        t0 = 0.08;
+        const a = Math.random() * Math.PI * 2, r = Math.random() * 1.8;
+        p.set(Math.cos(a) * r, lift + 0.1, Math.sin(a) * r);
+        g.localToWorld(p);
+        if (Math.random() < 0.35) fx.emit({ x: p.x, y: p.y, z: p.z, vy: 3.5, spread: 1.6, life: 0.9, size: 0.18, color: [1.6, 0.7, 0.15], alpha: 1, gravity: 7, count: 3 });
+        fx.emit({ x: p.x, y: p.y + 0.4, z: p.z, vy: 1.4, spread: 0.6, life: 4, size: 1.2, grow: 1.6, color: [0.75, 0.68, 0.62], alpha: 0.3, drag: 0.2 });
+      }
+    };
+    return g;
+  },
+
+  cindercone(ctx) {
+    const g = new THREE.Group();
+    // profile listed from the base upward so the faces point outward
+    const prof = [[2.7, -1.5], [2.55, 0.2], [1.6, 2.2], [1.0, 3.05], [0.7, 2.35], [0.01, 1.5]].map(([x, y]) => new THREE.Vector2(x, y));
+    const cone = jitterGeo(new THREE.LatheGeometry(prof, 18), 0.12, ctx.x * 3 + ctx.z);
+    add(g, cone, new THREE.MeshStandardMaterial({ color: '#5b3226', flatShading: true, roughness: 1, map: textures().speckle, side: THREE.DoubleSide }), 0, 0, 0);
+    add(g, new THREE.CircleGeometry(0.75, 14), new THREE.MeshStandardMaterial({ color: '#1f1b19', roughness: 1 }), 0, 1.55, 0, { rx: -Math.PI / 2, shadow: false });
+    return g;
+  },
+
+  lavatube(ctx) {
+    const m = materials();
+    const g = new THREE.Group();
+    const rock = new THREE.MeshStandardMaterial({ color: '#2f2a27', flatShading: true, roughness: 0.95, map: textures().speckle });
+    add(g, jitterGeo(new THREE.SphereGeometry(1.3, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0.15, ctx.x), rock, 0, -0.1, -0.2, { s: [1, 0.85, 1] });
+    add(g, jitterGeo(new THREE.TorusGeometry(0.7, 0.32, 6, 12, Math.PI), 0.08, ctx.z), rock, 0, 0.0, 0.85);
+    add(g, new THREE.CircleGeometry(0.62, 14, 0, Math.PI), new THREE.MeshBasicMaterial({ color: '#0c0a09' }), 0, 0.0, 0.82, { shadow: false });
+    // tree ferns and ferns around the entrance
+    for (const [x, z, sc] of [[-1.0, 0.9, 1], [1.05, 0.8, 0.8], [0.7, -0.9, 1.1]]) {
+      add(g, new THREE.CylinderGeometry(0.06, 0.08, 0.9 * sc, 5), m.logs, x, 0.45 * sc, z);
+      add(g, new THREE.ConeGeometry(0.55 * sc, 0.35, 7), m.mossGreen, x, 0.95 * sc, z, { rx: Math.PI });
+    }
+    return g;
+  },
+
+  fumarole(ctx) {
+    const g = new THREE.Group();
+    const sulfur = new THREE.MeshStandardMaterial({ color: '#d7c14a', flatShading: true, roughness: 0.9 });
+    const crust = new THREE.MeshStandardMaterial({ color: '#c9b9a0', flatShading: true, roughness: 1 });
+    add(g, new THREE.CircleGeometry(1.15, 16), crust, 0, 0.06, 0, { rx: -Math.PI / 2, shadow: false });
+    const vents = [];
+    const rand = mulberry32(ctx.x * 7 + ctx.z);
+    for (let i = 0; i < 4; i++) {
+      const x = (rand() - 0.5) * 1.4, z = (rand() - 0.5) * 1.4;
+      add(g, new THREE.CylinderGeometry(0.12, 0.3, 0.3, 7), sulfur, x, 0.15, z);
+      add(g, new THREE.CircleGeometry(0.35, 10), sulfur, x + 0.1, 0.07, z - 0.1, { rx: -Math.PI / 2, shadow: false });
+      vents.push(new THREE.Vector3(x, 0.35, z));
+    }
+    let t0 = 0;
+    const p = new THREE.Vector3();
+    g.userData.update = (dt, time, fx) => {
+      t0 -= dt;
+      if (t0 < 0 && fx) {
+        t0 = 0.1;
+        p.copy(vents[Math.floor(Math.random() * vents.length)]);
+        g.localToWorld(p);
+        fx.emit({ x: p.x, y: p.y, z: p.z, vy: 1.8, spread: 0.5, life: 2.6, size: 0.7, grow: 1.4, color: [1, 1, 0.92], alpha: 0.4, drag: 0.3 });
+      }
+    };
+    return g;
+  },
+
+  oceanentry(ctx) {
+    const g = new THREE.Group();
+    const t = ctx.terrain;
+    const rock = new THREE.MeshStandardMaterial({ color: '#211d1b', flatShading: true, roughness: 0.9 });
+    add(g, jitterGeo(new THREE.CylinderGeometry(1.4, 1.7, 1.2, 9, 1), 0.15, ctx.x), rock, 0, 0.0, 0);
+    // glowing channels spilling toward the water
+    const lavaMat = lavaMaterial(ctx.uniforms);
+    for (let i = 0; i < 3; i++) {
+      const a = -0.6 + i * 0.6;
+      add(g, new THREE.BoxGeometry(0.28, 0.06, 2.4), lavaMat, Math.sin(a) * 0.8, 0.62 - i * 0.03, Math.cos(a) * 0.8, { ry: a, shadow: false });
+    }
+    // find the nearest water to send the steam plume over
+    let wx = 0, wz = 0;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (t.inBounds(ctx.x + dx, ctx.z + dz) && t.isWater(ctx.x + dx, ctx.z + dz)) { wx = dx; wz = dz; }
+    g.rotation.y = Math.atan2(wx, wz);
+    let t0 = 0;
+    const p = new THREE.Vector3();
+    g.userData.update = (dt, time, fx) => {
+      t0 -= dt;
+      if (t0 < 0 && fx) {
+        t0 = 0.05;
+        p.set((Math.random() - 0.5) * 1.6, 0, 2.2);
+        g.localToWorld(p);
+        p.y = t.wl + 0.2;
+        fx.emit({ x: p.x, y: p.y, z: p.z, vy: 2.6, spread: 1.2, life: 4.5, size: 1.6, grow: 2.2, color: [0.95, 0.95, 0.97], alpha: 0.45, drag: 0.2 });
+        if (Math.random() < 0.3) fx.emit({ x: p.x, y: p.y + 0.2, z: p.z, vy: 3, spread: 2, life: 0.7, size: 0.15, color: [1.6, 0.6, 0.1], alpha: 1, gravity: 6, count: 2 });
+      }
+    };
+    return g;
+  },
+
   mudpot(ctx) {
     const m = materials();
     const g = new THREE.Group();
@@ -762,6 +871,38 @@ const BUILDERS = {
     return g;
   },
 };
+
+// Animated molten lava: dark crust plates with glowing cracks.
+let lavaMat = null;
+function lavaMaterial(uniforms) {
+  if (lavaMat) return lavaMat;
+  lavaMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: uniforms.uTime },
+    toneMapped: false,
+    vertexShader: 'varying vec3 vP; void main(){ vP = (modelMatrix * vec4(position,1.0)).xyz; gl_Position = projectionMatrix * viewMatrix * vec4(vP,1.0); }',
+    fragmentShader: /* glsl */`
+      uniform float uTime; varying vec3 vP;
+      vec2 h2(vec2 p){ p = vec2(dot(p, vec2(127.1,311.7)), dot(p, vec2(269.5,183.3))); return fract(sin(p) * 43758.5453); }
+      void main(){
+        vec2 p = vP.xz * 1.3 + vec2(uTime * 0.05, uTime * 0.03);
+        vec2 i = floor(p), f = fract(p);
+        float d1 = 8.0, d2 = 8.0;
+        for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+          vec2 o = vec2(float(x), float(y));
+          vec2 r = o + 0.5 + 0.4 * sin(uTime * 0.4 + 6.2831 * h2(i + o)) - f;
+          float d = dot(r, r);
+          if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+        }
+        float crack = 1.0 - smoothstep(0.0, 0.18, sqrt(d2) - sqrt(d1));
+        float pulse = 0.75 + 0.25 * sin(uTime * 2.0 + vP.x * 0.7 + vP.z * 0.5);
+        vec3 crust = vec3(0.06, 0.035, 0.03);
+        vec3 hot = mix(vec3(1.9, 0.45, 0.05), vec3(2.4, 1.3, 0.3), crack);
+        gl_FragColor = vec4(mix(crust, hot * pulse, crack), 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+  return lavaMat;
+}
 
 // A simple canoe hull with a seat; used at docks and by paddling visitors.
 export function canoe(color) {
