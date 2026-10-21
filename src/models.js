@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { T, N } from './terrain.js';
 import { mulberry32 } from './noise.js';
-import { textures } from './textures.js';
+import { textures, surface } from './textures.js';
 
 let M = null;
 export function materials() {
@@ -10,16 +10,16 @@ export function materials() {
   const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.85, ...o });
   const tx = textures();
   M = {
-    wood: std('#7a5233', { map: tx.planks }),
-    logs: std('#5e3d26', { map: tx.logs }),
-    roof: std('#3f6040', { map: tx.shingles }),
-    roofRed: std('#8b3d2b', { map: tx.shingles }),
-    stone: std('#9b9285', { map: tx.stone }),
-    stoneDark: std('#6c645b', { map: tx.stone }),
+    wood: std('#7a5233', { ...surface(tx.planks) }),
+    logs: std('#5e3d26', { ...surface(tx.logs, 1.2) }),
+    roof: std('#3f6040', { ...surface(tx.shingles, 1.1) }),
+    roofRed: std('#8b3d2b', { ...surface(tx.shingles, 1.1) }),
+    stone: std('#9b9285', { ...surface(tx.stone, 1.3) }),
+    stoneDark: std('#6c645b', { ...surface(tx.stone, 1.3) }),
     window: std('#2b2116', { emissive: new THREE.Color('#ffc46b'), emissiveIntensity: 0.2 }),
     cream: std('#efe4c8'),
     metal: std('#4d5359', { metalness: 0.5, roughness: 0.4 }),
-    tentA: std('#e0703a', { map: tx.canvas }), tentB: std('#3d7fb5', { map: tx.canvas }), tentC: std('#e9c043', { map: tx.canvas }),
+    tentA: std('#e0703a', { ...surface(tx.canvas, 0.5) }), tentB: std('#3d7fb5', { ...surface(tx.canvas, 0.5) }), tentC: std('#e9c043', { ...surface(tx.canvas, 0.5) }),
     flame: new THREE.MeshBasicMaterial({ color: '#ffb347' }),
     flameCore: new THREE.MeshBasicMaterial({ color: '#fff1a8' }),
     flag: std('#2f5d43', { side: THREE.DoubleSide }),
@@ -347,7 +347,7 @@ const BUILDERS = {
     // profile listed from the base upward so the faces point outward
     const prof = [[2.7, -1.5], [2.55, 0.2], [1.6, 2.2], [1.0, 3.05], [0.7, 2.35], [0.01, 1.5]].map(([x, y]) => new THREE.Vector2(x, y));
     const cone = jitterGeo(new THREE.LatheGeometry(prof, 18), 0.12, ctx.x * 3 + ctx.z);
-    add(g, cone, new THREE.MeshStandardMaterial({ color: '#5b3226', flatShading: true, roughness: 1, map: textures().speckle, side: THREE.DoubleSide }), 0, 0, 0);
+    add(g, cone, new THREE.MeshStandardMaterial({ color: '#5b3226', flatShading: true, roughness: 1, ...surface(textures().speckle), side: THREE.DoubleSide }), 0, 0, 0);
     add(g, new THREE.CircleGeometry(0.75, 14), new THREE.MeshStandardMaterial({ color: '#1f1b19', roughness: 1 }), 0, 1.55, 0, { rx: -Math.PI / 2, shadow: false });
     return g;
   },
@@ -355,7 +355,7 @@ const BUILDERS = {
   lavatube(ctx) {
     const m = materials();
     const g = new THREE.Group();
-    const rock = new THREE.MeshStandardMaterial({ color: '#2f2a27', flatShading: true, roughness: 0.95, map: textures().speckle });
+    const rock = new THREE.MeshStandardMaterial({ color: '#2f2a27', flatShading: true, roughness: 0.95, ...surface(textures().speckle) });
     add(g, jitterGeo(new THREE.SphereGeometry(1.3, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0.15, ctx.x), rock, 0, -0.1, -0.2, { s: [1, 0.85, 1] });
     add(g, jitterGeo(new THREE.TorusGeometry(0.7, 0.32, 6, 12, Math.PI), 0.08, ctx.z), rock, 0, 0.0, 0.85);
     add(g, new THREE.CircleGeometry(0.62, 14, 0, Math.PI), new THREE.MeshBasicMaterial({ color: '#0c0a09' }), 0, 0.0, 0.82, { shadow: false });

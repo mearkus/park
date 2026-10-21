@@ -162,23 +162,53 @@ export class Terrain {
             return mix(mix(th(i), th(i+vec2(1,0)), f.x), mix(th(i+vec2(0,1)), th(i+vec2(1,1)), f.x), f.y); }`)
         .replace('#include <color_fragment>', `#include <color_fragment>
           float flatK = smoothstep(0.55, 0.85, vNY);
-          // soft mottling everywhere
+          float camD = length(cameraPosition - vWP);
+          float near = 1.0 - smoothstep(40.0, 160.0, camD);   // fine detail fades with distance
+          // large-scale variation: dry and lush patches
+          float big = tn(vWP.xz * 0.08) * 0.6 + tn(vWP.xz * 0.21) * 0.4;
           float mott = tn(vWP.xz * 0.35) * 0.6 + tn(vWP.xz * 1.1) * 0.4;
-          diffuseColor.rgb *= 0.9 + mott * 0.2;
-          // grass / ground speckle on flats
-          float sp = th(floor(vWP.xz * 6.0));
-          diffuseColor.rgb *= 1.0 + flatK * (step(0.86, sp) * 0.07 - step(sp, 0.1) * 0.06);
-          // rock strata on steep faces and diorama sides
+          diffuseColor.rgb *= 0.88 + mott * 0.22;
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.12, 1.06, 0.82), flatK * smoothstep(0.55, 0.85, big) * 0.6);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.86, 1.02, 0.9), flatK * smoothstep(0.45, 0.15, big) * 0.6);
+          // grass blades: fine directional streaks and specks on flats
+          float blade = tn(vec2(vWP.x * 9.0 + vWP.z * 2.0, vWP.z * 1.2));
+          float sp = th(floor(vWP.xz * 7.0));
+          diffuseColor.rgb *= 1.0 + flatK * near * ((blade - 0.5) * 0.14 + step(0.9, sp) * 0.08 - step(sp, 0.08) * 0.07);
+          // rock: strata, cracks and lichen on steep faces and diorama sides
           float strata = sin(vWP.y * 3.4 + tn(vWP.xz * 0.4 + vWP.y * 0.1) * 4.0) * 0.5 + 0.5;
-          float cracks = smoothstep(0.92, 1.0, tn(vec2(vWP.x + vWP.z, vWP.y * 2.5) * 1.7));
-          diffuseColor.rgb *= 1.0 - (1.0 - flatK) * (strata * 0.13 + cracks * 0.18);
+          vec2 rp = vec2(vWP.x + vWP.z, vWP.y * 2.5);
+          float cracks = smoothstep(0.9, 1.0, tn(rp * 1.7)) + smoothstep(0.93, 1.0, tn(rp * 4.3)) * near;
+          float lichen = smoothstep(0.7, 0.85, tn(rp * 2.2 + 7.0)) * (1.0 - flatK);
+          diffuseColor.rgb *= 1.0 - (1.0 - flatK) * (strata * 0.15 + cracks * 0.22);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.45, 0.25), lichen * 0.35);
           float permanent = smoothstep(uSnowLine - 3.0, uSnowLine + 2.0, vWP.y);
           float seasonal = uSnow * smoothstep(uWaterLevel + 0.4, uWaterLevel + 1.6, vWP.y);
           float snow = max(permanent, seasonal) * smoothstep(0.45, 0.78, vNY) * (0.85 + tn(vWP.xz * 0.8) * 0.3);
           vec3 snowCol = vec3(0.93, 0.95, 1.0) * (0.97 + step(0.985, th(floor(vWP.xz * 14.0))) * 0.25);
           diffuseColor.rgb = mix(diffuseColor.rgb, snowCol, clamp(snow, 0.0, 1.0));
           float wet = 1.0 - smoothstep(uWaterLevel - 0.6, uWaterLevel + 0.15, vWP.y);
-          diffuseColor.rgb *= 1.0 - wet * 0.35;`);
+          diffuseColor.rgb *= 1.0 - wet * 0.35;
+          // shoreline pebbles
+          float shore = smoothstep(uWaterLevel + 1.2, uWaterLevel + 0.1, vWP.y) * (1.0 - wet) * flatK;
+          diffuseColor.rgb *= 1.0 + shore * near * (step(0.8, th(floor(vWP.xz * 11.0))) * 0.18 - 0.05);`)
+        // procedural bump: perturb the flat-shaded normal so grass and rock catch the light
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          {
+            float nearB = 1.0 - smoothstep(30.0, 140.0, length(cameraPosition - vWP));
+            float flatB = smoothstep(0.55, 0.85, vNY);
+            float e = 0.08;
+            // grass tufts on flats
+            vec2 g = vWP.xz * 3.2;
+            float h0 = tn(g) + 0.5 * tn(g * 2.7);
+            vec3 bw = vec3(tn(g + vec2(e, 0.0)) + 0.5 * tn((g + vec2(e, 0.0)) * 2.7) - h0, 0.0,
+                           tn(g + vec2(0.0, e)) + 0.5 * tn((g + vec2(0.0, e)) * 2.7) - h0) * (flatB * 0.55 / e);
+            // grooves and ledges on rock faces
+            vec2 r = vec2((vWP.x + vWP.z) * 1.4, vWP.y * 3.4);
+            float r0 = sin(r.y + tn(r * 0.3) * 4.0) + tn(r * 1.6) * 0.8;
+            float ry = sin(r.y + 3.4 * e + tn((r + vec2(0.0, 3.4 * e)) * 0.3) * 4.0) + tn((r + vec2(0.0, 3.4 * e)) * 1.6) * 0.8;
+            bw.y += (ry - r0) * (1.0 - flatB) * 0.5 / e;
+            normal = normalize(normal - (viewMatrix * vec4(bw * 0.06 * nearB, 0.0)).xyz);
+          }`);
     };
   }
 

@@ -3,17 +3,58 @@
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
 
+// Textures are drawn at a 256 design size and rendered at 2x for sharper detail.
+const SCALE = 2;
+
 function make(size, draw, repeat = 1) {
   const c = document.createElement('canvas');
-  c.width = c.height = size;
+  c.width = c.height = size * SCALE;
   const g = c.getContext('2d');
+  g.scale(SCALE, SCALE);
   draw(g, size, mulberry32(size * 7 + draw.length));
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeat, repeat);
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
+  tex.userData.normal = normalFrom(c, repeat);
   return tex;
+}
+
+// Derive a tangent-space normal map from the texture's brightness (bright = raised).
+function normalFrom(src, repeat, strength = 2.2) {
+  const w = src.width, h = src.height;
+  const lum = new Float32Array(w * h);
+  const d = src.getContext('2d').getImageData(0, 0, w, h).data;
+  for (let i = 0; i < w * h; i++) lum[i] = (d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11) / 255;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  const out = ctx.createImageData(w, h);
+  const at = (x, y) => lum[((y + h) % h) * w + ((x + w) % w)];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      const len = Math.hypot(dx, dy, 1);
+      const o = (y * w + x) * 4;
+      out.data[o] = (-dx / len * 0.5 + 0.5) * 255;
+      out.data[o + 1] = (dy / len * 0.5 + 0.5) * 255;
+      out.data[o + 2] = (1 / len * 0.5 + 0.5) * 255;
+      out.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeat, repeat);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+// Material options for a textured surface: colour map plus its matching normal map.
+export function surface(tex, bump = 0.9) {
+  return { map: tex, normalMap: tex.userData.normal, normalScale: new THREE.Vector2(bump, bump) };
 }
 
 const shade = (v, a = 1) => `rgba(${v},${v},${v},${a})`;
