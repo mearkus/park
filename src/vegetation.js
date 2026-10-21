@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { N, T, TILE } from './terrain.js';
 import { hash2 } from './noise.js';
-import { textures } from './textures.js';
+import { textures, surface } from './textures.js';
 
 const MAX_TREES = N * N * 3;
 
@@ -20,6 +20,21 @@ const TREE_KINDS = {
   treefern: { shape: 'juniper', trunk: '#4a3a2c', crown: ['#79b54e', '#6aa84a', '#6aa84a', '#66a046'], h: [1.8, 2.8], w: 1.05 },
   juniper: { shape: 'juniper', trunk: '#6b5440', crown: ['#5f7a55', '#5a7350', '#5d7452', '#5c6f54'], h: [1.4, 2.2], w: 1 },
 };
+
+// Bake a vertical light gradient into the crown: shaded underneath, sunlit on top.
+function shadeCrown(geo) {
+  const pos = geo.attributes.position;
+  geo.computeBoundingBox();
+  const { min, max } = geo.boundingBox;
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const k = (pos.getY(i) - min.y) / (max.y - min.y || 1);
+    const v = 0.62 + 0.48 * Math.pow(k, 0.8);
+    col[i * 3] = v * 0.97; col[i * 3 + 1] = v; col[i * 3 + 2] = v * 0.9;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
 
 function crownGeometry(shape) {
   if (shape === 'conifer') {
@@ -87,10 +102,10 @@ export class Vegetation {
     const dummyColor = new THREE.Color();
     for (const key of scn.trees) {
       const def = TREE_KINDS[key];
-      const crownMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.85 });
+      const crownMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.85, vertexColors: true });
       addWind(crownMat, uniforms);
       const trunkMat = new THREE.MeshStandardMaterial({ color: def.trunk, flatShading: true, roughness: 0.9 });
-      const crown = new THREE.InstancedMesh(crownGeometry(def.shape), crownMat, MAX_TREES);
+      const crown = new THREE.InstancedMesh(shadeCrown(crownGeometry(def.shape)), crownMat, MAX_TREES);
       const trunk = new THREE.InstancedMesh(trunkGeometry(def.shape), trunkMat, MAX_TREES);
       for (const m of [crown, trunk]) {
         m.castShadow = true;
@@ -127,7 +142,7 @@ export class Vegetation {
 
     // rocks
     this.rocks = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.5, 0),
-      new THREE.MeshStandardMaterial({ color: scn.rock, flatShading: true, roughness: 0.95, map: textures().speckle }), N * N);
+      new THREE.MeshStandardMaterial({ color: scn.rock, flatShading: true, roughness: 0.95, ...surface(textures().speckle) }), N * N);
     this.rocks.castShadow = true;
     this.rocks.receiveShadow = true;
     this.rocks.count = 0;
@@ -143,10 +158,10 @@ export class Vegetation {
       this.group.add(mesh);
       return mesh;
     };
-    this.decks = inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.8, map: textures().planks }), N * N);
+    this.decks = inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.8, ...surface(textures().planks) }), N * N);
     this.rails = inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.6, metalness: 0.2 }), N * N * 2);
     this.posts = inst(new THREE.BoxGeometry(1, 1, 1).translate(0, -0.5, 0), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.7 }), N * N * 6);
-    this.piers = inst(new THREE.CylinderGeometry(1, 1.15, 1, 8).translate(0, -0.5, 0), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9, map: textures().stone }), N * N * 4);
+    this.piers = inst(new THREE.CylinderGeometry(1, 1.15, 1, 8).translate(0, -0.5, 0), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9, ...surface(textures().stone, 1.3) }), N * N * 4);
   }
 
   rebuild() {
