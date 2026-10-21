@@ -5,7 +5,7 @@ import { createWater } from './water.js';
 import { buildModel } from './models.js';
 import { Herd } from './wildlife.js';
 import { Roads } from './roads.js';
-import { LANDMARKS, SPECIES, SCENARIO_BY_ID } from './scenarios.js';
+import { LANDMARKS, SPECIES, SCENARIO_BY_ID, TIER_INFO } from './scenarios.js';
 import { clamp } from './noise.js';
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -124,6 +124,7 @@ export class Game {
   constructor(world, scnId, save = null) {
     this.world = world; // { scene, particles, env, uniforms }
     this.scn = SCENARIO_BY_ID[scnId];
+    this.diff = TIER_INFO[this.scn.tier] || TIER_INFO[1];
     this.seed = save?.seed ?? this.scn.seed;
     this.name = save?.name ?? `${this.scn.name}`;
     this.listeners = {};
@@ -144,7 +145,7 @@ export class Game {
     this.vegetation = new Vegetation(world.scene, this.terrain, this.scn, world.uniforms);
     this.roads = new Roads(world.scene, this.terrain);
 
-    this.funds = save?.funds ?? 800;
+    this.funds = save?.funds ?? this.diff.funds;
     this.level = save?.level ?? 0;
     this.honors = new Set(save?.honors ?? []);
     this.entities = new Map();
@@ -325,6 +326,10 @@ export class Game {
           if (!nearWater) return fail('Must touch the water');
           break;
         }
+        case 'crater':
+          if (!allLand || maxSlope > 0.55) return fail('Needs a broad flat spot, like a crater floor');
+          if (t.tileH(x, z) < t.wl + 4) return fail('Needs high ground on the volcano');
+          break;
         case 'highflat':
           if (!allLand || maxSlope > 0.9) return fail('Needs a flat spot');
           if (t.tileH(x, z) < t.wl + 4) return fail('Needs high ground in the mountains');
@@ -670,6 +675,7 @@ export class Game {
         if (ty === TILE.BUILT) { k -= 2; continue; }
         if (water) { k += 0.3; continue; }
         const s = t.slope(x, z);
+        if (herd.species === 'nene') { k += ty === TILE.MEADOW ? 1.3 : ty === TILE.NATURAL ? 0.8 : 0.4; continue; }
         if (herd.species === 'owl') { k += ty === TILE.FOREST ? 1.1 : ty === TILE.MEADOW ? 0.7 : 0.2; continue; }
         if (sp.flying) { k += s > 1 ? 0.9 : 0.25; continue; }
         if (herd.species === 'tortoise') { k += ty === TILE.NATURAL ? (s < 0.6 ? 1.1 : 0.4) : ty === TILE.MEADOW ? 0.6 : 0.2; continue; }
@@ -857,6 +863,7 @@ export class Game {
     let income = monthVisitors * 0.004 + LEVELS[this.level].grant;
     // Conservation donors support wild, beautiful land from day one
     income += this.scores.eco * 0.1 + Math.max(0, this.scores.beauty - 25) * 0.15;
+    income *= this.diff.income; // harder landscapes get less money
     let upkeep = 0;
     for (const e of this.entities.values()) {
       if (!FACILITIES[e.kind]) continue;
@@ -870,7 +877,12 @@ export class Game {
   // ---- designations --------------------------------------------------------
   requirements(level = this.level + 1) {
     const s = this.scores;
-    const R = (label, value, target, fmt) => ({ label, value, target, ok: value >= target, fmt });
+    // harder landscapes raise score and visitor goals
+    const R = (label, value, target, fmt) => {
+      if (!fmt) target = Math.min(95, Math.round(target * this.diff.goal));
+      else if (fmt === 'visitors') target = Math.round(target * this.diff.goal / 1000) * 1000;
+      return { label, value, target, ok: value >= target, fmt };
+    };
     if (level === 1) return [
       R('Visitor center connected by road', this.hasVC ? 1 : 0, 1, 'bool'),
       R('Beauty', s.beauty, 35),

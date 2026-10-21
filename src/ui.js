@@ -56,15 +56,19 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- menu
-  buildMenu(scenarios, selected) {
+  buildMenu(scenarios, selected, lockReason = () => null) {
     const wrap = $('#scenarios');
     wrap.innerHTML = '';
     for (const s of scenarios) {
       const b = document.createElement('button');
-      b.className = 'scn' + (s.id === selected ? ' on' : '');
+      const locked = lockReason(s);
+      b.className = 'scn' + (s.id === selected ? ' on' : '') + (locked ? ' locked' : '');
       b.style.setProperty('--accent', s.accent);
-      b.innerHTML = `<div class="ins">Inspired by ${s.inspired}</div><h3>${s.name}</h3><p>${s.tagline}</p><div class="diff">Difficulty · ${s.difficulty}</div>`;
+      b.innerHTML = `<div class="ins">Inspired by ${s.inspired}</div><h3>${s.name}</h3><p>${s.tagline}</p>
+        <div class="diff"><span class="stars">${'★'.repeat(s.tier)}${'☆'.repeat(3 - s.tier)}</span> ${s.difficulty}</div>
+        ${locked ? `<div class="lock">🔒 ${locked}</div>` : ''}`;
       b.onclick = () => {
+        if (locked) { this.toast(`🔒 ${locked}.`, 'warn', 3500); return; }
         wrap.querySelectorAll('.scn').forEach((n) => n.classList.remove('on'));
         b.classList.add('on');
         this.h.selectScenario(s.id);
@@ -347,7 +351,7 @@ export class UI {
     this.modal(`<h2>Paused</h2><p>Your park is saved automatically on this device.</p>`, [
       { label: 'Resume', primary: true, action: () => this.h.setSpeed(1) },
       { label: 'How to play', action: () => this.howTo(() => this.h.setSpeed(1)) },
-      { label: '⚙️ Graphics', action: () => this.h.graphics(() => this.h.setSpeed(1)) },
+      { label: '⚙️ Settings', action: () => this.h.graphics(() => this.h.setSpeed(1)) },
       { label: 'Save & exit to title', action: () => this.h.quit() },
     ]);
   }
