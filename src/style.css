@@ -377,9 +377,11 @@ body.tutorial #toasts { top: calc(250px + var(--safe-top)); }
 
 /* ---------- Difficulty tiers & campaign ---------- */
 .scn .stars { color: var(--gold); letter-spacing: 1px; margin-right: 4px; }
-.scn.locked { filter: grayscale(0.85) brightness(0.7); }
-.scn.locked:hover { transform: none; }
+.scn.locked { filter: grayscale(0.75) brightness(0.75); }
+.scn.locked.on { filter: grayscale(0.3) brightness(0.95); }
 .scn .lock { position: absolute; inset: auto 8px 8px 8px; background: rgba(10,14,12,.85); border-radius: 10px; padding: 6px 8px; font-size: 11px; line-height: 1.3; color: var(--ink); text-align: center; }
 .set-h { margin: 14px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--gold); }
 .set-row { display: flex; justify-content: center; margin: 6px 0 4px; }
 .set-row .btn { width: auto; }
+
+#start.locked { background: rgba(255,255,255,0.12); color: var(--ink); box-shadow: none; border: 1px dashed var(--line); }

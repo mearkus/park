@@ -68,13 +68,20 @@ export class UI {
         <div class="diff"><span class="stars">${'★'.repeat(s.tier)}${'☆'.repeat(3 - s.tier)}</span> ${s.difficulty}</div>
         ${locked ? `<div class="lock">🔒 ${locked}</div>` : ''}`;
       b.onclick = () => {
-        if (locked) { this.toast(`🔒 ${locked}.`, 'warn', 3500); return; }
         wrap.querySelectorAll('.scn').forEach((n) => n.classList.remove('on'));
         b.classList.add('on');
         this.h.selectScenario(s.id);
       };
       wrap.appendChild(b);
     }
+  }
+
+  // Begin button reflects whether the selected landscape can be played yet.
+  setStartLocked(reason) {
+    const b = $('#start');
+    b.classList.toggle('locked', !!reason);
+    b.textContent = reason ? '🔒 Locked — preview only' : 'Begin your park';
+    b.title = reason || '';
   }
 
   setContinue(save) {
