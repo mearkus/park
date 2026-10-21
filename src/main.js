@@ -142,8 +142,11 @@ function firstOpenScenario() {
 const ui = new UI({
   selectScenario(id) {
     menuScenario = id;
-    prefs.lastScenario = id;
-    savePrefs();
+    const locked = lockReason(SCENARIO_BY_ID[id]);
+    ui.setStartLocked(locked);
+    // locked landscapes can be previewed but aren't remembered as the default pick
+    if (!locked) { prefs.lastScenario = id; savePrefs(); }
+    else ui.toast(`🔒 Preview of <b>${SCENARIO_BY_ID[id].name}</b>. ${locked}.`, '', 4000);
     loadWorld(id);
   },
   start() {
@@ -279,6 +282,7 @@ function showMenu() {
   controls.autoRotateSpeed = 0.45;
   menuScenario = firstOpenScenario();
   ui.buildMenu(SCENARIOS, menuScenario, lockReason);
+  ui.setStartLocked(null);
   ui.setContinue(readSave());
   loadWorld(menuScenario);
   frameCamera(true);
@@ -980,7 +984,7 @@ function graphicsModal(after) {
   document.getElementById('campaignToggle').onclick = () => {
     prefs.campaign = !campaignOn();
     savePrefs();
-    if (mode === 'menu') { menuScenario = firstOpenScenario(); ui.buildMenu(SCENARIOS, menuScenario, lockReason); }
+    if (mode === 'menu') { menuScenario = firstOpenScenario(); ui.buildMenu(SCENARIOS, menuScenario, lockReason); ui.setStartLocked(null); loadWorld(menuScenario); }
     graphicsModal(after);
   };
 }
