@@ -2,6 +2,8 @@
 
 A 3D park-building game for desktop and mobile browsers, made with three.js. You shape a wild landscape, protect its natural wonders and work your way up to **National Park** status.
 
+**Play:** [in your browser](https://mearkus.github.io/park/) · [download the Android app (APK)](https://github.com/mearkus/park/releases/download/latest-build/WildHorizons-debug.apk) · [all builds](https://github.com/mearkus/park/releases/tag/latest-build)
+
 ## Play locally
 
 ```bash
@@ -23,8 +25,8 @@ The apps wrap the same web game with [Capacitor](https://capacitorjs.com); the w
   backgrounded, status bar and splash screen. All no-ops on the website.
 
 **Installing a build:** every push to `main` updates the
-[Latest build](../../releases/tag/latest-build) pre-release:
-- `WildHorizons-debug.apk` – open it on an Android phone to install (allow "install unknown apps").
+[Latest build](https://github.com/mearkus/park/releases/tag/latest-build) pre-release:
+- [`WildHorizons-debug.apk`](https://github.com/mearkus/park/releases/download/latest-build/WildHorizons-debug.apk) – open it on an Android phone to install (allow "install unknown apps").
 - `WildHorizons-simulator.zip` – an unsigned build for the iOS Simulator. Unzip and drag `App.app`
   onto the Simulator. Real iPhones need a signed TestFlight build.
 
