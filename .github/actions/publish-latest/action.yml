@@ -1,0 +1,33 @@
+name: Publish to the Latest build release
+description: Uploads a file to the rolling "latest-build" pre-release and moves its tag to this commit.
+inputs:
+  file:
+    description: Path of the file to upload
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        FILE: ${{ inputs.file }}
+      run: |
+        set -euo pipefail
+        TAG=latest-build
+        SHORT=${GITHUB_SHA::7}
+        NOTES=$(cat <<NOTES
+        Automatic build of \`main\` at commit [$SHORT](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA), updated on every push. Not a store release.
+
+        **Android:** download \`WildHorizons-debug.apk\` on your phone and open it. Allow installing from unknown sources when asked. To update, install the newer APK over the old one.
+
+        **iOS Simulator:** on a Mac, unzip \`WildHorizons-simulator.zip\`, open the Simulator (Xcode → Open Developer Tool → Simulator) and drag \`App.app\` onto it. Real iPhones need a signed TestFlight build.
+        NOTES
+        )
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          # Move the tag to this commit, then refresh the notes.
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          gh release edit "$TAG" --title "Latest build ($SHORT)" --notes "$NOTES" --prerelease
+        else
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "Latest build ($SHORT)" --notes "$NOTES" --prerelease
+        fi
+        gh release upload "$TAG" "$FILE" --clobber

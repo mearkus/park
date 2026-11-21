@@ -13,6 +13,13 @@ import { Ambience } from './ambience.js';
 import { Visitors } from './visitors.js';
 import { Tutorial } from './tutorial.js';
 import { Boats } from './boats.js';
+import '@fontsource-variable/fraunces/opsz.css';
+import '@fontsource-variable/inter';
+import { isNative, restoreStorage, persist, haptic, onBackButton, exitApp, onAppStateChange, setupChrome } from './native.js';
+
+// In the Android/iOS apps, bring back saves kept in native storage before anything reads them.
+await restoreStorage();
+setupChrome();
 
 const SAVE_KEY = 'wild-horizons-save-v1';
 const PREF_KEY = 'wild-horizons-prefs-v1';
@@ -69,7 +76,11 @@ const boats = new Boats(scene);
 
 let prefs = {};
 try { prefs = JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { prefs = {}; }
-const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* ignore */ } };
+const savePrefs = () => {
+  const v = JSON.stringify(prefs);
+  try { localStorage.setItem(PREF_KEY, v); } catch { /* ignore */ }
+  persist(PREF_KEY, v);
+};
 env.setTime(prefs.time && TIMES[prefs.time] ? prefs.time : 'golden');
 
 let graphicsPref = GRAPHICS[prefs.graphics] || prefs.graphics === 'auto' ? prefs.graphics : 'auto';
@@ -112,7 +123,9 @@ function readSave() {
 }
 function writeSave() {
   if (!game || mode !== 'play') return;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(game.serialize())); } catch { /* storage full or blocked */ }
+  const v = JSON.stringify(game.serialize());
+  try { localStorage.setItem(SAVE_KEY, v); } catch { /* storage full or blocked */ }
+  persist(SAVE_KEY, v);
 }
 
 // ---------------------------------------------------------------- campaign progression
@@ -246,6 +259,7 @@ function hookGame(g) {
   });
   g.on('designated', (lvl) => {
     audio.sfx('fanfare');
+    haptic('success');
     ui.ceremony(lvl, g, () => setTour(true));
     if (lvl === 3) announceUnlocks(recordCompletion(g.scn.id));
   });
@@ -758,6 +772,7 @@ function click(hit) {
     if (coarse) { marker.visible = false; ui.tileInfo(null); }
   }
   if (res.ok) {
+    haptic(toolInfo(tool).group === 'landmark' ? 'medium' : 'light');
     const info = toolInfo(tool);
     const sp = tool.startsWith('wl:') ? tool.slice(3) : '';
     audio.sfx(tool === 'remove' ? 'remove' : info.group === 'landmark' ? 'landmark' : sp === 'whale' ? 'whale' : sp === 'condor' ? 'bird' : sp ? 'herd' : tool === 'pond' ? 'remove' : 'build');
@@ -770,6 +785,7 @@ function click(hit) {
     writeSaveSoon();
   } else {
     audio.sfx('error');
+    haptic('warning');
     ui.toast(`✗ ${res.reason}`, 'warn', 2200);
   }
   hoverDirty = true;
@@ -845,6 +861,24 @@ function keyboardPan(dt) {
 }
 
 document.addEventListener('visibilitychange', () => { if (document.hidden) writeSave(); });
+
+// Android back button: close a dialog, then drop the active tool, then pause; quit only from the title screen.
+onBackButton(() => {
+  if (modalOpen) ui.closeModal();
+  else if (mode !== 'play') exitApp();
+  else if (tool !== 'explore') selectTool('explore');
+  else ui.pauseMenu();
+});
+// App sent to the background: save, quiet the audio, and come back to the pause menu.
+onAppStateChange((active) => {
+  if (!active) {
+    writeSave();
+    audio.ctx?.suspend?.();
+    if (mode === 'play' && !modalOpen) ui.pauseMenu();
+  } else if (audio.on) {
+    audio.ctx?.resume?.();
+  }
+});
 addEventListener('pagehide', writeSave);
 
 function onResize() {
@@ -1077,7 +1111,8 @@ if (resumeSave) {
 requestAnimationFrame(loop);
 
 // ---------------------------------------------------------------- install & offline
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// The apps already bundle every file (and iOS apps can't use service workers), so this is web-only.
+if (!isNative && 'serviceWorker' in navigator && import.meta.env.PROD) {
   addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => { /* offline support unavailable */ }));
 }
 const installBtn = document.getElementById('install');
@@ -1093,7 +1128,7 @@ addEventListener('appinstalled', () => {
   ui.toast('🏕️ Installed! Wild Horizons now works offline.', 'good');
 });
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-if (isIOS && !standalone) installBtn.classList.remove('hidden');
+if (isIOS && !standalone && !isNative) installBtn.classList.remove('hidden');
 installBtn.onclick = async () => {
   if (deferredInstall) {
     deferredInstall.prompt();

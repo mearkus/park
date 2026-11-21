@@ -1,0 +1,12 @@
+{
+  "appId": "com.mearkus.wildhorizons",
+  "appName": "Wild Horizons",
+  "webDir": "dist",
+  "backgroundColor": "#1b2f27",
+  "android": { "backgroundColor": "#1b2f27" },
+  "ios": { "backgroundColor": "#1b2f27", "contentInset": "never" },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 600, "backgroundColor": "#1b2f27", "showSpinner": false },
+    "StatusBar": { "style": "DARK", "backgroundColor": "#1b2f27", "overlaysWebView": false }
+  }
+}

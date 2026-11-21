@@ -1,0 +1,55 @@
+name: Android
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      - run: npm test --if-present
+      # Builds the web app into webDir and copies it into the Android project.
+      - run: npm run cap:sync -- android
+      - name: Build
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: park-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  publish:
+    name: Publish to Latest build
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Both app workflows update the same release, so take turns.
+    concurrency:
+      group: latest-build-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: park-android-debug
+      - run: mv app-debug.apk WildHorizons-debug.apk
+      - uses: ./.github/actions/publish-latest
+        with:
+          file: WildHorizons-debug.apk

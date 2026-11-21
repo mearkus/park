@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Wild Horizons</string>
+    <string name="title_activity_main">Wild Horizons</string>
+    <string name="package_name">com.mearkus.wildhorizons</string>
+    <string name="custom_url_scheme">com.mearkus.wildhorizons</string>
+</resources>
