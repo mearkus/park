@@ -238,6 +238,12 @@ export class UI {
     nd.textContent = `${net >= 0 ? '+' : ''}${fmtMoney(net)}/mo`;
     nd.className = 'delta ' + (net >= 0 ? 'up' : 'down');
     $('#visitors').textContent = fmtVisitors(g.visitors);
+    // Visitors are capped by how many the park can host, so show the cap next to them.
+    const cap = $('#vcap');
+    const full = g.demand > g.capacity;
+    cap.textContent = !g.hasVC ? 'Needs a Visitor Center' : full ? `Full · room for ${fmtVisitors(g.capacity)}` : `room for ${fmtVisitors(g.capacity)}`;
+    cap.className = 'delta' + (full || !g.hasVC ? ' down' : '');
+    cap.title = full ? 'More people want to visit than your park can host. Campgrounds, lodges, docks and museums add room.' : '';
     const m = g.month % 12;
     $('#date').textContent = `${MONTHS[m]} · ${SEASONS[seasonOf(g.month)]} · Year ${Math.floor(g.month / 12) + 1}`;
     if (document.activeElement !== $('#parkName')) $('#parkName').value = g.name;
@@ -278,6 +284,7 @@ export class UI {
       pet.classList.toggle('glow', ok);
       pet.textContent = ok ? `Petition for ${LEVELS[g.level + 1].name} status` : `Meet all goals to petition`;
     }
+    reqEl.insertAdjacentHTML('beforeend', this.whyBox(g));
     $('#honors').innerHTML = Object.entries(HONORS).map(([id, H]) => {
       const got = g.honors.has(id);
       const rs = g.honorRequirements(id);
@@ -290,6 +297,25 @@ export class UI {
       const info = toolInfo(b.dataset.tool);
       b.classList.toggle('poor', (info.cost || 0) > g.funds);
     });
+  }
+
+  // Plain-language reasons behind the numbers players most often get stuck on.
+  whyBox(g) {
+    const rows = [];
+    if (!g.hasVC) {
+      rows.push(`<div class="why-row"><span>👥 Visitors</span><b>${fmtVisitors(g.visitors)} / ${fmtVisitors(g.capacity)}</b></div><small>Without a road-connected Visitor Center only ${fmtVisitors(g.capacity)} people a year can come.</small>`);
+    } else {
+      const full = g.demand > g.capacity;
+      rows.push(`<div class="why-row"><span>👥 Visitor capacity</span><b class="${full ? 'bad' : ''}">${fmtVisitors(g.visitors)} / ${fmtVisitors(g.capacity)}</b></div>` +
+        (full ? `<small>Full: ${fmtVisitors(g.demand)} want to come. Campgrounds add 60K, lodges 120K, museums 60K, docks 15K.</small>` : ''));
+    }
+    const losses = g.beautyLosses || [];
+    if (losses.length) {
+      const total = losses.reduce((a, x) => a + x.value, 0);
+      rows.push(`<div class="why-row"><span>🏔️ Beauty lost</span><b class="bad">−${Math.round(total)}</b></div>` +
+        losses.map((x) => `<small>−${x.value < 9.5 ? x.value.toFixed(1) : Math.round(x.value)} ${escapeHTML(x.label)}${x.tip ? ` · ${x.tip}` : ''}</small>`).join(''));
+    }
+    return `<div class="why">${rows.join('')}</div>`;
   }
 
   reqRow(r) {

@@ -367,6 +367,12 @@ body.tutorial #toasts { top: calc(250px + var(--safe-top)); }
 #cats button.has-new::after { content: ''; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
 .unlock-preview { margin-top: 10px; font-size: 12px; color: var(--ink-dim); background: rgba(255,255,255,.05); border-radius: 10px; padding: 6px 8px; }
 .unlock-preview span { font-size: 16px; }
+.why { margin-top: 10px; font-size: 12px; background: rgba(255,255,255,.05); border-radius: 10px; padding: 6px 8px; }
+.why:empty { display: none; }
+.why-row { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.why-row b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.why-row b.bad { color: var(--bad); }
+.why small { display: block; color: var(--ink-dim); line-height: 1.35; }
 .unlocks { margin: 12px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
 .unlocks .eyebrow { grid-column: 1 / -1; }
 .unlocks .u { background: rgba(246,195,91,.12); border: 1px solid rgba(246,195,91,.35); border-radius: 10px; padding: 6px; font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: center; }

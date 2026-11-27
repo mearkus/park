@@ -755,12 +755,22 @@ export class Game {
     }).sort((a, b) => b - a);
     this.bestView = views[0] || 0;
     beauty += Math.min(towers.length ? 20 : 16, views.reduce((s, v, i) => s + v * Math.pow(0.7, i), 0));
-    let penalty = road * 0.12 + built * 0.55;
+    const roadLoss = road * 0.12, builtLoss = built * 0.55;
+    let crowdLoss = 0, crowdGap = 4;
+    const crowding = new Set();
     for (const f of fac) {
       if (f.kind === 'overlook' || f.kind === 'ranger' || f.kind === 'tower' || f.kind === 'dock') continue;
-      for (const l of landmarks) if (Math.max(Math.abs(f.x - l.x), Math.abs(f.z - l.z)) <= 2 + l.size) penalty += 2.5;
+      for (const l of landmarks) {
+        if (Math.max(Math.abs(f.x - l.x), Math.abs(f.z - l.z)) <= 2 + l.size) { crowdLoss += 2.5; crowding.add(f.def.name); crowdGap = Math.max(crowdGap, 3 + l.size); }
+      }
     }
-    beauty -= penalty;
+    beauty -= roadLoss + builtLoss + crowdLoss;
+    // What is pulling Beauty down, biggest first, so the goals panel can explain it.
+    this.beautyLosses = [
+      { label: crowding.size ? `${[...crowding].join(', ')} too close to a wonder` : 'Buildings too close to wonders', value: crowdLoss, tip: `Keep buildings ${crowdGap}+ tiles from wonders` },
+      { label: 'Building footprints', value: builtLoss },
+      { label: 'Roads', value: roadLoss, tip: 'Trails cost no Beauty' },
+    ].filter((x) => x.value >= 0.5).sort((a, b) => b.value - a.value);
 
     // --- Uniqueness
     let unique = this.scn.baseUnique;
