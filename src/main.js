@@ -128,6 +128,24 @@ function writeSave() {
   persist(SAVE_KEY, v);
 }
 
+// Only one park is saved on this device, and starting a new park (or the tutorial)
+// replaces it. Ask first whenever that would throw away a park the player has built.
+function hasProgress(s) {
+  if (!s) return false;
+  return s.month > 3 || s.level > 0 || (s.herds?.length ?? 0) > 0 || (s.ents || []).some((e) => e.kind !== 'entrance');
+}
+function confirmReplaceSave(go) {
+  const s = readSave();
+  if (!hasProgress(s)) { go(); return; }
+  const year = Math.floor(s.month / 12) + 1;
+  const level = LEVELS[s.level]?.name || LEVELS[0].name;
+  ui.modal(`<div style="font-size:52px">💾</div><h2>Replace your saved park?</h2><p>Starting a new park will erase <b>${escapeHTML(s.name)}</b> (${level}, Year ${year}). Only one park is saved on this device.</p>`, [
+    { label: `Continue ${s.name}`, primary: true, action: () => startGame(s.scn, s) },
+    { label: 'Erase it and start new', action: go },
+    { label: 'Cancel' },
+  ]);
+}
+
 // ---------------------------------------------------------------- campaign progression
 // With campaign mode on, harder landscapes unlock after reaching National Park in an easier one.
 const campaignOn = () => prefs.campaign !== false;
@@ -165,11 +183,13 @@ const ui = new UI({
   start() {
     const reason = lockReason(SCENARIO_BY_ID[menuScenario]);
     if (reason) { ui.toast(`🔒 ${reason}.`, 'warn', 3500); return; }
-    if (prefs.tutorialDone) { startGame(menuScenario, null); return; }
-    ui.modal(`<div style="font-size:52px">🎓</div><h2>New to Wild Horizons?</h2><p>A short guided tutorial shows you how to build your first park and earn State Park status.</p>`, [
-      { label: 'Play the tutorial', primary: true, action: () => startTutorial() },
-      { label: 'Skip — just build', action: () => { prefs.tutorialDone = true; savePrefs(); startGame(menuScenario, null); } },
-    ]);
+    confirmReplaceSave(() => {
+      if (prefs.tutorialDone) { startGame(menuScenario, null); return; }
+      ui.modal(`<div style="font-size:52px">🎓</div><h2>New to Wild Horizons?</h2><p>A short guided tutorial shows you how to build your first park and earn State Park status.</p>`, [
+        { label: 'Play the tutorial', primary: true, action: () => startTutorial() },
+        { label: 'Skip — just build', action: () => { prefs.tutorialDone = true; savePrefs(); startGame(menuScenario, null); } },
+      ]);
+    });
   },
   continueGame() {
     const s = readSave();
@@ -1026,7 +1046,7 @@ function graphicsModal(after) {
 // ---------------------------------------------------------------- boot
 setGraphicsPref(graphicsPref);
 document.getElementById('graphicsBtn').onclick = () => settingsModal();
-document.getElementById('tutorialBtn').onclick = () => startTutorial();
+document.getElementById('tutorialBtn').onclick = () => confirmReplaceSave(startTutorial);
 document.getElementById('btnUndo').onclick = () => undo();
 audio.night = env.key === 'night';
 if (prefs.audio) audio.setSettings(prefs.audio);
