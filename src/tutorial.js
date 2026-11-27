@@ -30,6 +30,38 @@ function nextToRoad(g) {
   });
 }
 
+// Buildings within this many tiles of a wonder cost Beauty (see Game.recompute),
+// so the tutorial's markers keep the two apart.
+const CROWDED = (lm) => 2 + (lm.size || 1);
+const CLUTTER = new Set(['visitor', 'campground', 'lodge', 'museum']);
+const near = (a, x, z, d) => Math.max(Math.abs(a.x - x), Math.abs(a.z - z)) <= d;
+
+function awayFromWonders(g) {
+  const wonders = [...g.entities.values()].filter((e) => e.landmark);
+  return (x, z) => !wonders.some((l) => near(l, x, z, CROWDED(l)));
+}
+
+function awayFromBuildings(g, size = 1) {
+  const built = [...g.entities.values()].filter((e) => CLUTTER.has(e.kind));
+  return (x, z) => !built.some((b) => near(b, x, z, 2 + size));
+}
+
+const both = (a, b) => (x, z) => a(x, z) && b(x, z);
+
+function beside(g) {
+  // a tile touching a path that visitors can already reach
+  const t = g.terrain;
+  return (x, z) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => {
+    const nx = x + dx, nz = z + dz;
+    return t.inBounds(nx, nz) && g.reachAny?.[t.idx(nx, nz)];
+  });
+}
+
+function beautyShort(g) {
+  const r = g.requirements(1).find((q) => q.label === 'Beauty');
+  return r && !r.ok ? r : null;
+}
+
 function roadEnd(g) {
   // furthest reachable road tile from the entrance
   const t = g.terrain, e = g.entrance;
@@ -61,14 +93,14 @@ const STEPS = [
     text: 'Open <b>Build</b>, pick <b>Visitor Center</b>, and place it <b>right beside your road</b>. Every park needs one.',
     cat: 'facilities', tool: 'visitor',
     done: (g) => g.hasVC,
-    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'visitor', e.x, e.z, 10, nextToRoad(g)); },
+    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'visitor', e.x, e.z, 10, both(nextToRoad(g), awayFromWonders(g))); },
   },
   {
     title: 'Protect a natural wonder',
     text: 'Open <b>Wonders</b> and place a <b>Geyser</b> on flat ground. Wonders raise <b>Beauty</b> and <b>Uniqueness</b> — and every so often it erupts!',
     cat: 'wonders', tool: 'lm:geyser',
     done: (g) => g.landmarkCount >= 1,
-    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'lm:geyser', e.x - 3, e.z - 3, 14); },
+    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'lm:geyser', e.x - 3, e.z - 3, 14, awayFromBuildings(g)); },
   },
   {
     title: 'Blaze a trail',
@@ -79,10 +111,10 @@ const STEPS = [
   },
   {
     title: 'Let visitors stay',
-    text: 'Back in <b>Build</b>, add a <b>Campground</b> beside a road. It adds visitor capacity and a little income.',
+    text: 'Back in <b>Build</b>, add a <b>Campground</b> beside a road, away from the geyser. It adds visitor capacity and a little income.',
     cat: 'facilities', tool: 'campground',
     done: (g) => [...g.entities.values()].some((e) => e.kind === 'campground' && e.connected),
-    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'campground', e.x, e.z + 2, 10, nextToRoad(g)); },
+    beacon: (g) => { const e = roadEnd(g); return findSpot(g, 'campground', e.x, e.z + 2, 10, both(nextToRoad(g), awayFromWonders(g))); },
   },
   {
     title: 'Watch the seasons turn',
@@ -97,6 +129,12 @@ const STEPS = [
     highlight: '#petition',
     goals: true,
     done: (g) => g.level >= 1,
+    // If Beauty is still short, point at a spot for a Scenic Overlook beside a path, high and near the geyser.
+    beacon: (g) => {
+      if (!beautyShort(g)) return null;
+      const l = [...g.entities.values()].find((e) => e.landmark) || roadEnd(g);
+      return findSpot(g, 'overlook', l.x, l.z, 12, beside(g));
+    },
   },
   {
     title: 'Bring back wildlife',
@@ -184,9 +222,11 @@ export class Tutorial {
     const extra = this.el.querySelector('.coach-extra');
     if (s.goals && extra) {
       const miss = g.requirements(1).filter((r) => !r.ok).map((r) => r.label);
-      extra.innerHTML = miss.length
-        ? `<small>Still needed: <b>${miss.join(', ')}</b>.${miss.includes('Beauty') ? ' Tip: plant wildflower meadows or build a scenic overlook.' : ''}</small>`
+      const short = beautyShort(g);
+      const tip = short
+        ? ` Beauty is ${short.value} of ${short.target}: open <b>Build</b> and add a <b>Scenic Overlook</b> beside your trail (the marker shows a good spot), or plant wildflower meadows.`
         : '';
+      extra.innerHTML = miss.length ? `<small>Still needed: <b>${miss.join(', ')}</b>.${tip}</small>` : '';
     }
     if (force || !this.beaconTimer || performance.now() - this.beaconTimer > 1500) {
       this.beaconTimer = performance.now();
